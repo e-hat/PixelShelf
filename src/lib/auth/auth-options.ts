@@ -1,6 +1,7 @@
 import type { NextAuthOptions, Session, User } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import type { User as AppUser } from '@/types';
 import prisma from "@/lib/db/prisma";
 import GoogleProvider from "next-auth/providers/google";
 import GithubProvider from "next-auth/providers/github";
@@ -62,6 +63,8 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           image: user.image,
+          username: user.username,
+          subscriptionTier: user.subscriptionTier,
         };
       },
     }),

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { SubmitHandler, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
@@ -27,12 +27,10 @@ import { api, ApiError } from '@/lib/api/api-client';
 
 // Form schema
 const formSchema = z.object({
-  title: z.string().min(3, {
-    message: 'Title must be at least 3 characters.',
-  }),
+  title: z.string().min(3, { message: 'Title must be at least 3 characters.' }),
   description: z.string().optional(),
   thumbnail: z.string().optional(),
-  isPublic: z.boolean().default(false),
+  isPublic: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;

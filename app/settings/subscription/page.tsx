@@ -22,9 +22,10 @@ import {
   Lock
 } from 'lucide-react';
 import SubscriptionButton from '@/components/feature-specific/subscription-button';
+import { User } from '@/types';
 
 // Mock user data for the MVP
-const MOCK_USER = {
+const MOCK_USER: User = {
   id: '1',
   name: 'Alex Johnson',
   email: 'alex@example.com',
@@ -33,6 +34,7 @@ const MOCK_USER = {
   subscriptionStart: null,
   subscriptionEnd: null,
 };
+
 
 export default function SubscriptionPage() {
   const { data: session } = useSession();
@@ -313,7 +315,7 @@ export default function SubscriptionPage() {
               <CardFooter>
                 {isPremium ? (
                   <SubscriptionButton
-                    type="portal"
+                    actionType="portal"
                     className="w-full"
                     variant="outline"
                   >
@@ -321,7 +323,7 @@ export default function SubscriptionPage() {
                   </SubscriptionButton>
                 ) : (
                   <SubscriptionButton
-                    type="checkout"
+                    actionType="checkout"
                     className="w-full"
                     variant="pixel"
                   >

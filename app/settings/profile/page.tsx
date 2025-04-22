@@ -25,7 +25,8 @@ import {
   Github,
   Linkedin,
   Globe,
-  MapPin
+  MapPin,
+  ImageIcon
 } from 'lucide-react';
 
 // Mock user data for the MVP

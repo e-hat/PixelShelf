@@ -12,15 +12,14 @@ export const ourFileRouter = {
     audio: { maxFileSize: "16MB", maxFileCount: 1 },
     video: { maxFileSize: "64MB", maxFileCount: 1 },
     pdf: { maxFileSize: "4MB", maxFileCount: 1 },
-    model: { maxFileSize: "32MB", maxFileCount: 1 },
     blob: { maxFileSize: "32MB", maxFileCount: 1 },
   })
     // Set permissions and file types for this FileRoute
     .middleware(async ({ req }) => {
-      // This code runs on your server before upload
+      // This code runs on this server before upload
       const session = await getServerSession(authOptions);
  
-      // If you throw, the user will not be able to upload
+      // If this throws, the user will not be able to upload
       if (!session || !session.user) throw new Error("Unauthorized");
  
       // Whatever is returned here is accessible in onUploadComplete as `metadata`
@@ -44,7 +43,7 @@ export const ourFileRouter = {
       return { uploadedBy: metadata.userId, fileUrl: file.url, fileKey: file.key };
     }),
     
-  projectImage: f({ image: { maxFileSize: "6MB", maxFileCount: 1 } })
+  projectImage: f({ image: { maxFileSize: "8MB", maxFileCount: 1 }, })
     .middleware(async ({ req }) => {
       const session = await getServerSession(authOptions);
       if (!session || !session.user) throw new Error("Unauthorized");

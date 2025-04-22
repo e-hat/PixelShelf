@@ -18,6 +18,16 @@ export function formatDate(date: Date | string | number): string {
 }
 
 /**
+ * Formats a date or timestamp to time-only (e.g. "3:45 PM")
+ */
+export function formatTime(date: Date | string | number): string {
+  return new Date(date).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
  * Returns a relative time string (e.g. "5 minutes ago")
  */
 export function getRelativeTime(date: Date | string | number): string {

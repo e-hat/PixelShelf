@@ -6,13 +6,13 @@ import { toast } from 'sonner';
 import { Loader2, CreditCard, ExternalLink } from 'lucide-react';
 import { Button, ButtonProps } from '@/components/ui/button';
 
-interface SubscriptionButtonProps extends ButtonProps {
-  type: 'checkout' | 'portal';
+interface SubscriptionButtonProps extends Omit<ButtonProps, 'type'> {
+  actionType: 'checkout' | 'portal';
   children: React.ReactNode;
 }
 
 export default function SubscriptionButton({ 
-  type, 
+  actionType, 
   children, 
   variant = 'pixel',
   size,
@@ -32,7 +32,7 @@ export default function SubscriptionButton({
 
     try {
       // Call the appropriate API endpoint based on button type
-      const endpoint = type === 'checkout' 
+      const endpoint = actionType === 'checkout' 
         ? '/api/payments/create-checkout' 
         : '/api/payments/create-portal';
       
@@ -70,7 +70,7 @@ export default function SubscriptionButton({
         </>
       ) : (
         <>
-          {type === 'checkout' ? (
+          {actionType === 'checkout' ? (
             <CreditCard className="mr-2 h-4 w-4" />
           ) : (
             <ExternalLink className="mr-2 h-4 w-4" />

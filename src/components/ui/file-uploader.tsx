@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { generateClientDropzoneAccept } from 'uploadthing/client';
-import { useDropzone } from 'react-dropzone';
+import { Accept, useDropzone } from 'react-dropzone';
 import { UploadCloud, File, X, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useUploadThing } from '@/lib/cloud/uploadthing-client';
@@ -19,6 +19,25 @@ interface FileUploaderProps {
   fileType?: 'image' | 'audio' | 'video' | 'pdf' | 'model' | 'blob';
 }
 
+const getAcceptType = (type: FileUploaderProps['fileType']): Accept | undefined => {
+  switch (type) {
+    case 'image':
+      return { 'image/*': ['.png', '.jpg', '.jpeg', '.gif'] };
+    case 'audio':
+      return { 'audio/*': ['.mp3', '.wav'] };
+    case 'video':
+      return { 'video/*': ['.mp4', '.webm'] };
+    case 'pdf':
+      return { 'application/pdf': ['.pdf'] };
+    case 'model':
+      return { 'model/*': ['.obj', '.fbx', '.glb'] }; // adjust MIME if needed
+    case 'blob':
+      return undefined; // allow all
+    default:
+      return undefined;
+  }
+};
+
 export function FileUploader({
   endpoint,
   value,
@@ -31,11 +50,12 @@ export function FileUploader({
   const [preview, setPreview] = useState<string | null>(value || null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const { startUpload, permittedFileInfo } = useUploadThing(endpoint, {
+  const { startUpload } = useUploadThing(endpoint, {
     onClientUploadComplete: (res) => {
       setIsUploading(false);
-      if (res?.[0]?.fileUrl) {
-        onChange(res[0].fileUrl);
+      const uploadedFile = res?.[0] as { fileUrl?: string };
+      if (uploadedFile?.fileUrl) {
+        onChange(uploadedFile.fileUrl);
       }
     },
     onUploadError: (error) => {
@@ -45,8 +65,7 @@ export function FileUploader({
     },
   });
 
-  const fileTypes = permittedFileInfo?.config?.[fileType] ?? null;
-  const accept = fileTypes ? generateClientDropzoneAccept(fileTypes) : undefined;
+  const accept = getAcceptType(fileType);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {

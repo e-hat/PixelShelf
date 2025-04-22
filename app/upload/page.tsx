@@ -18,7 +18,7 @@ import {
   Image as ImageIcon, 
   Music, 
   FileVideo, 
-  File3d, 
+  Box, 
   FileText, 
   Loader2,
   FolderKanban 
@@ -36,7 +36,7 @@ const uploadSchema = z.object({
   description: z.string().optional(),
   projectId: z.string().optional(),
   tags: z.string().optional(),
-  isPublic: z.boolean().default(true),
+  isPublic: z.boolean(),
 });
 
 type UploadFormValues = z.infer<typeof uploadSchema>;
@@ -189,7 +189,7 @@ export default function UploadPage() {
       case 'MODEL_3D':
         return (
           <div className="aspect-video w-full flex items-center justify-center bg-muted rounded-md relative">
-            <File3d className="h-16 w-16 text-muted-foreground" />
+            <Box className="h-16 w-16 text-muted-foreground" />
             <div className="absolute top-2 right-2">
               <button 
                 onClick={clearFile}

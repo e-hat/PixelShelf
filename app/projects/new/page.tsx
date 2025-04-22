@@ -23,7 +23,7 @@ import {
 const projectSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters' }),
   description: z.string().optional(),
-  isPublic: z.boolean().default(false),
+  isPublic: z.boolean(),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;

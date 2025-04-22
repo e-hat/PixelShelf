@@ -24,6 +24,7 @@ import AssetCard from '@/components/feature-specific/asset-card';
 import ProjectCard from '@/components/feature-specific/project-card';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Asset } from '@/types';
 
 interface PageProps {
   params: {
@@ -53,20 +54,28 @@ const MOCK_USER = {
   isPremium: true,
 };
 
-const MOCK_ASSETS = [
+const MOCK_ASSETS: Asset[] = [
   {
     id: '1',
     title: 'Forest Tileset',
     description: 'A complete tileset for forest environments with 64x64 pixel art tiles.',
     fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: '1',
+    isPublic: true,
+    tags: ['forest', 'tileset', 'pixel art'],
+    createdAt: new Date('2023-10-15'),
+    updatedAt: new Date('2023-10-16'),
     user: {
-      name: 'pixelartist',
+      id: '1',
+      name: 'Alex Johnson',
+      username: 'pixelartist',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 156,
     comments: 24,
-    createdAt: new Date('2023-10-15'),
+    likedByUser: false,
   },
   {
     id: '2',
@@ -74,13 +83,21 @@ const MOCK_ASSETS = [
     description: 'Main hero character with walking, running, and attack animations.',
     fileUrl: 'https://images.unsplash.com/photo-1633467067804-c08b17fd2a8a',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: '1',
+    isPublic: true,
+    tags: ['character', 'spritesheet', 'pixel art'],
+    createdAt: new Date('2023-10-12'),
+    updatedAt: new Date('2023-10-13'),
     user: {
-      name: 'pixelartist',
+      id: '1',
+      name: 'Alex Johnson',
+      username: 'pixelartist',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 243,
     comments: 43,
-    createdAt: new Date('2023-10-12'),
+    likedByUser: false,
   },
   {
     id: '3',
@@ -88,13 +105,21 @@ const MOCK_ASSETS = [
     description: 'Comprehensive UI kit with buttons, panels, and icons in retro 8-bit style.',
     fileUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: '1',
+    isPublic: true,
+    tags: ['ui', '8-bit', 'interface'],
+    createdAt: new Date('2023-10-20'),
+    updatedAt: new Date('2023-10-21'),
     user: {
-      name: 'pixelartist',
+      id: '1',
+      name: 'Alex Johnson',
+      username: 'pixelartist',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 89,
     comments: 12,
-    createdAt: new Date('2023-10-20'),
+    likedByUser: false,
   },
 ];
 

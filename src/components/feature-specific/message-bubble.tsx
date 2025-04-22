@@ -1,9 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { format } from 'date-fns';
 import { Check, CheckCheck } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import { UserAvatar } from '@/components/feature-specific/user-avatar';
 
 interface MessageBubbleProps {
@@ -34,8 +33,8 @@ export function MessageBubble({
   className,
 }: MessageBubbleProps) {
   const formattedTime = typeof message.createdAt === 'string'
-    ? format(new Date(message.createdAt), 'p')
-    : format(message.createdAt, 'p');
+    ? formatTime(new Date(message.createdAt))
+    : formatTime(message.createdAt);
   
   const baseStyles = cn(
     'max-w-[75%] relative flex flex-col group',
