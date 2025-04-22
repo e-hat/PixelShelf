@@ -52,6 +52,16 @@ export default function EditAssetPage({ params }: EditAssetPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Set up form
+  const formSchema = z.object({
+    title: z.string().min(3, {
+      message: 'Title must be at least 3 characters.',
+    }),
+    description: z.string().optional(),
+    projectId: z.string().nullable().optional(),
+    isPublic: z.boolean(), // Remove `.default(true)`
+    tags: z.string().optional(),
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -98,8 +108,10 @@ export default function EditAssetPage({ params }: EditAssetPageProps) {
         });
         
         // Fetch user's projects
-        const projectsResponse = await api.projects.getAll({ userId: session.user.id });
-        setProjects(projectsResponse.projects);
+        if (session?.user?.id) {
+          const projectsResponse = await api.projects.getAll({ userId: session.user.id });
+          setProjects(projectsResponse.projects);
+        }
       } catch (error) {
         console.error('Error fetching asset:', error);
         if (error instanceof ApiError && error.status === 404) {

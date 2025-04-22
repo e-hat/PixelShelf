@@ -101,7 +101,7 @@ export const useAppStore = create<AppState>()(
 // Define notification store types
 interface NotificationState {
   unreadCount: number;
-  setUnreadCount: (count: number) => void;
+  setUnreadCount: (count: number | ((prev: number) => number)) => void;
   incrementUnreadCount: () => void;
   decrementUnreadCount: (count?: number) => void;
   resetUnreadCount: () => void;
@@ -113,7 +113,12 @@ interface NotificationState {
 // Create notification store
 export const useNotificationStore = create<NotificationState>((set) => ({
   unreadCount: 0,
-  setUnreadCount: (count) => set({ unreadCount: count }),
+  setUnreadCount: (countOrUpdater) =>
+    set((state) => ({
+      unreadCount: typeof countOrUpdater === 'function'
+        ? countOrUpdater(state.unreadCount)
+        : countOrUpdater,
+    })),
   incrementUnreadCount: () => set((state) => ({ unreadCount: state.unreadCount + 1 })),
   decrementUnreadCount: (count = 1) => 
     set((state) => ({ 

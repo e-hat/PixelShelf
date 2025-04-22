@@ -1,21 +1,62 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
-import { User, MessageSquare, Bell, Menu, X, LogOut, Settings, Home, Search, Upload, FolderPlus } from 'lucide-react';
-import { useState } from 'react';
-import NotificationIndicator from '../feature-specific/notification-indicator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { UserAvatar } from '@/components/feature-specific/user-avatar';
+import NotificationIndicator from '@/components/feature-specific/notification-indicator';
+import { 
+  User, 
+  MessageSquare, 
+  Bell, 
+  Menu, 
+  X, 
+  LogOut, 
+  Settings, 
+  Home, 
+  Search, 
+  Upload, 
+  FolderPlus,
+  ChevronDown
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useNotificationStore } from '@/store';
 
 const Navbar = () => {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const hasNewMessages = useNotificationStore(state => state.hasNewMessages);
+
+  // Track scroll position to add shadow to navbar
+  useEffect(() => {
+    const handleScroll = () => {
+      setHasScrolled(window.scrollY > 10);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });
     router.push('/');
+    router.refresh();
   };
 
   const toggleMobileMenu = () => {
@@ -25,12 +66,20 @@ const Navbar = () => {
   const navItems = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Explore', href: '/explore', icon: Search },
-    { name: 'Upload', href: '/upload', icon: Upload },
-    { name: 'New Project', href: '/projects/new', icon: FolderPlus }
+    { name: 'Upload', href: '/upload', icon: Upload, requiresAuth: true },
+    { name: 'New Project', href: '/projects/new', icon: FolderPlus, requiresAuth: true }
   ];
 
+  // Filter items that require authentication if user is not logged in
+  const filteredNavItems = navItems.filter(item => 
+    !item.requiresAuth || status === 'authenticated'
+  );
+
   return (
-    <nav className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-border">
+    <nav className={cn(
+      "sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-border transition-shadow duration-200",
+      hasScrolled && "shadow-sm"
+    )}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo and brand */}
@@ -50,11 +99,16 @@ const Navbar = () => {
           <div className="hidden md:flex md:items-center md:space-x-6">
             {/* Navigation links */}
             <div className="flex items-center space-x-4">
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <Link 
                   key={item.name} 
                   href={item.href}
-                  className="text-sm text-foreground hover:text-pixelshelf-primary transition-colors flex items-center"
+                  className={cn(
+                    "text-sm font-medium transition-colors flex items-center",
+                    pathname === item.href 
+                      ? "text-pixelshelf-primary" 
+                      : "text-foreground hover:text-pixelshelf-primary"
+                  )}
                 >
                   <item.icon className="mr-1 h-4 w-4" />
                   {item.name}
@@ -65,53 +119,60 @@ const Navbar = () => {
             {/* User section */}
             {session ? (
               <div className="flex items-center space-x-4">
-                <Link href="/notifications" className="relative text-foreground hover:text-pixelshelf-primary">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute -top-1 -right-1 bg-pixelshelf-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
-                    3
-                  </span>
-                </Link>
-                <Link href="/chat" className="text-foreground hover:text-pixelshelf-primary">
+                <NotificationIndicator className="relative" />
+                
+                <Link 
+                  href="/chat" 
+                  className={cn(
+                    "relative text-foreground hover:text-pixelshelf-primary",
+                    pathname?.startsWith('/chat') && "text-pixelshelf-primary"
+                  )}
+                >
                   <MessageSquare className="h-5 w-5" />
+                  {hasNewMessages && (
+                    <span className="absolute -top-1 -right-1 bg-pixelshelf-primary text-white rounded-full w-2 h-2" />
+                  )}
                 </Link>
-                <div className="relative group">
-                  <button className="flex items-center space-x-1">
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-pixelshelf-light border border-pixelshelf-primary">
-                      {session.user?.image ? (
-                        <Image 
-                          src={session.user.image} 
-                          alt={session.user.name || 'User'} 
-                          width={32} 
-                          height={32} 
-                        />
-                      ) : (
-                        <User className="h-5 w-5 m-1.5 text-pixelshelf-primary" />
-                      )}
-                    </div>
-                  </button>
-                  <div className="absolute right-0 w-48 mt-2 origin-top-right bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block">
-                    <div className="py-1">
-                      <Link 
-                        href={`/u/${session.user?.name}`} 
-                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        Profile
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center space-x-1 focus:outline-none" aria-label="User menu">
+                      <UserAvatar 
+                        user={session.user} 
+                        size="sm" 
+                        showBadge 
+                        isPremium={session.user.subscriptionTier === 'PREMIUM'} 
+                      />
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="font-medium">{session.user.name}</p>
+                        <p className="text-xs text-muted-foreground">@{session.user.username || 'username'}</p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href={`/u/${session.user.username || session.user.name}`}>
+                        <User className="mr-2 h-4 w-4" />
+                        <span>Profile</span>
                       </Link>
-                      <Link 
-                        href="/settings" 
-                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        Settings
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings/profile">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
                       </Link>
-                      <button 
-                        onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Sign out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
               <div className="flex items-center space-x-4">
@@ -145,11 +206,16 @@ const Navbar = () => {
       {mobileMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-pixelshelf-light hover:text-pixelshelf-primary"
+                className={cn(
+                  "block px-3 py-2 rounded-md text-base font-medium",
+                  pathname === item.href
+                    ? "bg-pixelshelf-light text-pixelshelf-primary"
+                    : "text-foreground hover:bg-muted"
+                )}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
@@ -163,28 +229,28 @@ const Navbar = () => {
             <div className="pt-4 pb-3 border-t border-border">
               <div className="flex items-center px-5">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-pixelshelf-light border border-pixelshelf-primary">
-                    {session.user?.image ? (
-                      <Image 
-                        src={session.user.image} 
-                        alt={session.user.name || 'User'} 
-                        width={40} 
-                        height={40} 
-                      />
-                    ) : (
-                      <User className="h-6 w-6 m-2 text-pixelshelf-primary" />
-                    )}
-                  </div>
+                  <UserAvatar 
+                    user={session.user}
+                    size="md"
+                    showBadge
+                    isPremium={session.user.subscriptionTier === 'PREMIUM'}
+                  />
                 </div>
                 <div className="ml-3">
-                  <div className="text-base font-medium text-foreground">{session.user?.name}</div>
-                  <div className="text-sm font-medium text-muted-foreground">{session.user?.email}</div>
+                  <div className="text-base font-medium text-foreground">{session.user.name}</div>
+                  <div className="text-sm font-medium text-muted-foreground">{session.user.email}</div>
+                </div>
+                <div className="ml-auto flex items-center space-x-4">
+                  <NotificationIndicator />
+                  <Link href="/chat" className="text-gray-400 hover:text-gray-300">
+                    <MessageSquare className="h-6 w-6" />
+                  </Link>
                 </div>
               </div>
               <div className="mt-3 px-2 space-y-1">
                 <Link 
-                  href={`/u/${session.user?.name}`}
-                  className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-pixelshelf-light hover:text-pixelshelf-primary"
+                  href={`/u/${session.user.username || session.user.name}`}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-muted"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <div className="flex items-center">
@@ -193,8 +259,8 @@ const Navbar = () => {
                   </div>
                 </Link>
                 <Link 
-                  href="/settings"
-                  className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-pixelshelf-light hover:text-pixelshelf-primary"
+                  href="/settings/profile"
+                  className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-muted"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <div className="flex items-center">
@@ -204,7 +270,7 @@ const Navbar = () => {
                 </Link>
                 <button 
                   onClick={handleSignOut}
-                  className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-pixelshelf-light hover:text-pixelshelf-primary"
+                  className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-muted"
                 >
                   <div className="flex items-center">
                     <LogOut className="mr-2 h-5 w-5" />
@@ -225,7 +291,6 @@ const Navbar = () => {
           )}
         </div>
       )}
-      <NotificationIndicator />
     </nav>
   );
 };

@@ -4,105 +4,13 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
-import { ArrowRight, Heart, MessageSquare, Share } from 'lucide-react';
-import AssetCard from '@/components/feature-specific/asset-card';
-
-// Temporary mock data for the MVP
-const MOCK_TRENDING_ASSETS = [
-  {
-    id: '1',
-    title: 'Forest Tileset',
-    description: 'A complete tileset for forest environments with 64x64 pixel art tiles.',
-    fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
-    fileType: 'IMAGE',
-    user: {
-      name: 'PixelQueen',
-      image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-    },
-    likes: 156,
-    comments: 24,
-    createdAt: new Date('2023-10-15'),
-  },
-  {
-    id: '2',
-    title: 'Character Sprite Sheet',
-    description: 'Main hero character with walking, running, and attack animations.',
-    fileUrl: 'https://images.unsplash.com/photo-1633467067804-c08b17fd2a8a',
-    fileType: 'IMAGE',
-    user: {
-      name: 'GameArtPro',
-      image: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d',
-    },
-    likes: 243,
-    comments: 43,
-    createdAt: new Date('2023-10-12'),
-  },
-  {
-    id: '3',
-    title: '8-Bit UI Elements',
-    description: 'Comprehensive UI kit with buttons, panels, and icons in retro 8-bit style.',
-    fileUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9',
-    fileType: 'IMAGE',
-    user: {
-      name: 'RetroDevs',
-      image: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d',
-    },
-    likes: 89,
-    comments: 12,
-    createdAt: new Date('2023-10-20'),
-  },
-  {
-    id: '4',
-    title: 'Spaceship 3D Model',
-    description: 'Low-poly spaceship model perfect for space shooters or exploration games.',
-    fileUrl: 'https://images.unsplash.com/photo-1581822261290-991b38693d1b',
-    fileType: 'MODEL_3D',
-    user: {
-      name: 'GalacticModeler',
-      image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36',
-    },
-    likes: 178,
-    comments: 31,
-    createdAt: new Date('2023-10-18'),
-  },
-  {
-    id: '5',
-    title: 'Dungeon Sound Effects',
-    description: 'Pack of 20 atmospheric sound effects for dungeon levels.',
-    fileUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745',
-    fileType: 'AUDIO',
-    user: {
-      name: 'SoundScaper',
-      image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-    },
-    likes: 62,
-    comments: 8,
-    createdAt: new Date('2023-10-23'),
-  },
-  {
-    id: '6',
-    title: 'Boss Battle Theme',
-    description: 'Epic orchestral boss battle music track for your game\'s climactic moments.',
-    fileUrl: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d',
-    fileType: 'AUDIO',
-    user: {
-      name: 'GameComposer',
-      image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36',
-    },
-    likes: 201,
-    comments: 37,
-    createdAt: new Date('2023-10-10'),
-  },
-];
+import { ArrowRight, Check } from 'lucide-react';
+import { DashboardFeed } from '@/components/feature-specific/dashboard-feed';
+import { PageHeader } from '@/components/layout/page-header';
+import { SUBSCRIPTION_PLANS } from '@/constants';
 
 export default function HomePage() {
   const { data: session } = useSession();
-  const [tab, setTab] = useState<'trending' | 'following'>('trending');
-  
-  // For the MVP, we're just using static data
-  // In a real app, we would fetch from an API based on the selected tab
-  const assets = MOCK_TRENDING_ASSETS;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -167,51 +75,121 @@ export default function HomePage() {
                 <p className="text-muted-foreground text-center">Follow creators, chat directly, and discover new collaborators.</p>
               </div>
             </div>
+            
+            {/* Pricing section */}
+            <div className="mt-24 w-full max-w-5xl">
+              <h2 className="text-3xl font-bold mb-12">Simple, Transparent Pricing</h2>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Free tier */}
+                <div className="border rounded-lg overflow-hidden bg-card">
+                  <div className="p-6 border-b">
+                    <h3 className="text-2xl font-bold">{SUBSCRIPTION_PLANS.FREE.name}</h3>
+                    <div className="mt-4">
+                      <span className="text-3xl font-bold">${SUBSCRIPTION_PLANS.FREE.price}</span>
+                      <span className="text-muted-foreground"> / Forever free</span>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                    <ul className="space-y-2">
+                      {SUBSCRIPTION_PLANS.FREE.features.map(feature => (
+                        <li key={feature} className="flex items-start">
+                          <Check className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    
+                    {SUBSCRIPTION_PLANS.FREE.limitations && (
+                      <ul className="space-y-2 pt-4 border-t">
+                        {SUBSCRIPTION_PLANS.FREE.limitations.map(limitation => (
+                          <li key={limitation} className="flex items-start text-muted-foreground">
+                            <span className="mr-2">•</span>
+                            <span>{limitation}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  
+                  <div className="p-6 bg-muted/30">
+                    <Link href="/signup">
+                      <Button className="w-full" variant="outline">
+                        Get Started
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+                
+                {/* Premium tier */}
+                <div className="border-2 border-pixelshelf-primary rounded-lg overflow-hidden bg-card relative">
+                  <div className="absolute top-0 right-0">
+                    <div className="bg-pixelshelf-primary text-white text-xs px-3 py-1 rounded-bl-md">
+                      RECOMMENDED
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 border-b">
+                    <h3 className="text-2xl font-bold flex items-center">
+                      {SUBSCRIPTION_PLANS.PREMIUM.name}
+                    </h3>
+                    <div className="mt-4">
+                      <span className="text-3xl font-bold">${SUBSCRIPTION_PLANS.PREMIUM.price}</span>
+                      <span className="text-muted-foreground"> / monthly</span>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                    <ul className="space-y-3">
+                      {SUBSCRIPTION_PLANS.PREMIUM.features.map(feature => (
+                        <li key={feature} className="flex items-start">
+                          <Check className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div className="p-6 bg-muted/30">
+                    <Link href="/signup">
+                      <Button className="w-full" variant="pixel">
+                        Upgrade to Premium
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       )}
 
       {/* Main content */}
       <div className="container px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold tracking-tight">
-            {session ? 'Your Feed' : 'Discover'}
-          </h2>
-          {session && (
-            <div className="flex rounded-md overflow-hidden border">
-              <button
-                onClick={() => setTab('trending')}
-                className={`px-4 py-2 text-sm font-medium ${
-                  tab === 'trending' ? 'bg-pixelshelf-primary text-white' : 'bg-background'
-                }`}
-              >
-                Trending
-              </button>
-              <button
-                onClick={() => setTab('following')}
-                className={`px-4 py-2 text-sm font-medium ${
-                  tab === 'following' ? 'bg-pixelshelf-primary text-white' : 'bg-background'
-                }`}
-              >
-                Following
-              </button>
+        {session ? (
+          <>
+            <PageHeader
+              title="Your Feed"
+              description="Discover trending assets or see the latest from creators you follow"
+            />
+            <DashboardFeed initialTab="trending" />
+          </>
+        ) : (
+          <>
+            <h2 className="text-3xl font-bold mb-8">Trending Now</h2>
+            <DashboardFeed initialTab="trending" />
+            
+            <div className="flex justify-center mt-8">
+              <Link href="/explore">
+                <Button variant="outline" size="lg">
+                  Explore More
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
             </div>
-          )}
-        </div>
-
-        {/* Grid of assets */}
-        <div className="grid-masonry">
-          {assets.map((asset) => (
-            <AssetCard key={asset.id} asset={asset} />
-          ))}
-        </div>
-
-        {/* Show more button */}
-        <div className="flex justify-center mt-8">
-          <Button variant="outline">
-            Load More
-          </Button>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { Asset } from "@/types";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -69,4 +70,23 @@ export function getAssetTypeFromUrl(url: string): 'IMAGE' | 'MODEL_3D' | 'AUDIO'
   if (videoExtensions.includes(extension)) return 'VIDEO';
   if (documentExtensions.includes(extension)) return 'DOCUMENT';
   return 'OTHER';
+}
+
+/**
+ * Normalizes raw API asset data into a fully-typed `Asset` object.
+ */
+export function normalizeAsset(apiAsset: any): Asset {
+  return {
+    ...apiAsset,
+    fileType: (apiAsset.fileType?.toUpperCase() || 'OTHER') as Asset['fileType'],
+    description: apiAsset.description ?? null,
+    user: {
+      ...apiAsset.user,
+      name: apiAsset.user?.name ?? null,
+      username: apiAsset.user?.username ?? null,
+      image: apiAsset.user?.image ?? null,
+    },
+    likes: apiAsset.likes ?? 0,
+    comments: apiAsset.comments ?? 0,
+  };
 }

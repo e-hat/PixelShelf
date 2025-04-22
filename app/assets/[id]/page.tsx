@@ -12,7 +12,7 @@ import {
   Download, 
   MoreHorizontal, 
   FileAudio, 
-  File3d, 
+  Box, 
   FileText,
   Play,
   Pause,
@@ -179,7 +179,7 @@ export default function AssetDetailPage({ params }: PageProps) {
               className="object-cover"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-              <File3d className="h-24 w-24 text-white" />
+              <Box className="h-24 w-24 text-white" />
             </div>
           </div>
         );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, SetStateAction } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,23 +10,30 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssetCard from '@/components/feature-specific/asset-card';
 import { cn } from '@/lib/utils';
+import { Asset } from '@/types';
 
 // Mock data for MVP
-const MOCK_ASSETS = [
+const MOCK_ASSETS: Asset[] = [
   {
     id: '1',
     title: 'Forest Tileset',
     description: 'A complete tileset for forest environments with 64x64 pixel art tiles.',
     fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: 'user-1',
+    isPublic: true,
+    tags: ['forest', 'tileset', 'pixel-art', '2d', 'environment'],
+    createdAt: new Date('2023-10-15'),
+    updatedAt: new Date('2023-10-16'),
     user: {
+      id: 'user-1',
       name: 'PixelQueen',
+      username: 'pixelqueen',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 156,
     comments: 24,
-    createdAt: new Date('2023-10-15'),
-    tags: ['forest', 'tileset', 'pixel-art', '2d', 'environment'],
   },
   {
     id: '2',
@@ -34,14 +41,20 @@ const MOCK_ASSETS = [
     description: 'Main hero character with walking, running, and attack animations.',
     fileUrl: 'https://images.unsplash.com/photo-1633467067804-c08b17fd2a8a',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: 'user-2',
+    isPublic: true,
+    tags: ['character', 'sprite-sheet', 'pixel-art', 'animation', 'hero'],
+    createdAt: new Date('2023-10-12'),
+    updatedAt: new Date('2023-10-13'),
     user: {
+      id: 'user-2',
       name: 'GameArtPro',
+      username: 'gameartpro',
       image: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d',
     },
     likes: 243,
     comments: 43,
-    createdAt: new Date('2023-10-12'),
-    tags: ['character', 'sprite-sheet', 'pixel-art', 'animation', 'hero'],
   },
   {
     id: '3',
@@ -49,14 +62,20 @@ const MOCK_ASSETS = [
     description: 'Comprehensive UI kit with buttons, panels, and icons in retro 8-bit style.',
     fileUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: 'user-3',
+    isPublic: true,
+    tags: ['ui', '8-bit', 'retro', 'interface', 'buttons'],
+    createdAt: new Date('2023-10-20'),
+    updatedAt: new Date('2023-10-21'),
     user: {
+      id: 'user-3',
       name: 'RetroDevs',
+      username: 'retrodevs',
       image: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d',
     },
     likes: 89,
     comments: 12,
-    createdAt: new Date('2023-10-20'),
-    tags: ['ui', '8-bit', 'retro', 'interface', 'buttons'],
   },
   {
     id: '4',
@@ -64,14 +83,20 @@ const MOCK_ASSETS = [
     description: 'Low-poly spaceship model perfect for space shooters or exploration games.',
     fileUrl: 'https://images.unsplash.com/photo-1581822261290-991b38693d1b',
     fileType: 'MODEL_3D',
+    projectId: null,
+    userId: 'user-4',
+    isPublic: true,
+    tags: ['3d', 'spaceship', 'low-poly', 'sci-fi', 'model'],
+    createdAt: new Date('2023-10-18'),
+    updatedAt: new Date('2023-10-19'),
     user: {
+      id: 'user-4',
       name: 'GalacticModeler',
+      username: 'galacticmodeler',
       image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36',
     },
     likes: 178,
     comments: 31,
-    createdAt: new Date('2023-10-18'),
-    tags: ['3d', 'spaceship', 'low-poly', 'sci-fi', 'model'],
   },
   {
     id: '5',
@@ -79,14 +104,20 @@ const MOCK_ASSETS = [
     description: 'Pack of 20 atmospheric sound effects for dungeon levels.',
     fileUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745',
     fileType: 'AUDIO',
+    projectId: null,
+    userId: 'user-5',
+    isPublic: true,
+    tags: ['audio', 'sound-effects', 'dungeon', 'atmosphere', 'fantasy'],
+    createdAt: new Date('2023-10-23'),
+    updatedAt: new Date('2023-10-24'),
     user: {
+      id: 'user-5',
       name: 'SoundScaper',
+      username: 'soundscaper',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 62,
     comments: 8,
-    createdAt: new Date('2023-10-23'),
-    tags: ['audio', 'sound-effects', 'dungeon', 'atmosphere', 'fantasy'],
   },
   {
     id: '6',
@@ -94,14 +125,20 @@ const MOCK_ASSETS = [
     description: 'Epic orchestral boss battle music track for your game\'s climactic moments.',
     fileUrl: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d',
     fileType: 'AUDIO',
+    projectId: null,
+    userId: 'user-6',
+    isPublic: true,
+    tags: ['audio', 'music', 'boss-battle', 'orchestral', 'epic'],
+    createdAt: new Date('2023-10-10'),
+    updatedAt: new Date('2023-10-11'),
     user: {
+      id: 'user-6',
       name: 'GameComposer',
+      username: 'gamecomposer',
       image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36',
     },
     likes: 201,
     comments: 37,
-    createdAt: new Date('2023-10-10'),
-    tags: ['audio', 'music', 'boss-battle', 'orchestral', 'epic'],
   },
   {
     id: '7',
@@ -109,14 +146,20 @@ const MOCK_ASSETS = [
     description: 'Complete set of modular dungeon pieces for building diverse game levels.',
     fileUrl: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: 'user-7',
+    isPublic: true,
+    tags: ['dungeon', 'modular', 'tileset', 'level-design', '3d'],
+    createdAt: new Date('2023-10-05'),
+    updatedAt: new Date('2023-10-06'),
     user: {
+      id: 'user-7',
       name: 'DungeonMaster',
+      username: 'dungeonmaster',
       image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
     },
     likes: 315,
     comments: 52,
-    createdAt: new Date('2023-10-05'),
-    tags: ['dungeon', 'modular', 'tileset', 'level-design', '3d'],
   },
   {
     id: '8',
@@ -124,16 +167,23 @@ const MOCK_ASSETS = [
     description: 'Collection of rain, snow, fog and other weather effects in pixel art style.',
     fileUrl: 'https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d',
     fileType: 'IMAGE',
+    projectId: null,
+    userId: 'user-8',
+    isPublic: true,
+    tags: ['weather', 'effects', 'pixel-art', 'animation', 'particles'],
+    createdAt: new Date('2023-10-14'),
+    updatedAt: new Date('2023-10-15'),
     user: {
+      id: 'user-8',
       name: 'PixelStorm',
+      username: 'pixelstorm',
       image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
     },
     likes: 127,
     comments: 19,
-    createdAt: new Date('2023-10-14'),
-    tags: ['weather', 'effects', 'pixel-art', 'animation', 'particles'],
   },
 ];
+
 
 const MOCK_CREATORS = [
   {
@@ -252,8 +302,8 @@ export default function ExplorePage() {
       const lowerQuery = query.toLowerCase();
       assets = assets.filter(asset => 
         asset.title.toLowerCase().includes(lowerQuery) || 
-        asset.description.toLowerCase().includes(lowerQuery) ||
-        asset.user.name.toLowerCase().includes(lowerQuery)
+        asset.description?.toLowerCase().includes(lowerQuery) ||
+        asset.user.name?.toLowerCase().includes(lowerQuery)
       );
     }
     
@@ -456,7 +506,7 @@ export default function ExplorePage() {
         <div className="flex justify-between items-center">
           <Tabs 
             defaultValue={activeTab} 
-            onValueChange={(value) => {
+            onValueChange={(value: string) => {
               setActiveTab(value);
               
               // Update URL

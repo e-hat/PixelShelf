@@ -2,58 +2,44 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api, ApiError } from '@/lib/api/api-client';
-import { Asset } from '@/types';
 import { toast } from 'sonner';
-import { normalizeAsset } from '@/lib/utils';
+import { Project, ProjectQueryParams, UseProjects } from '@/types';
 
-interface UseAssetsOptions {
-  userId?: string;
-  projectId?: string;
-  type?: string;
-  tag?: string;
-  search?: string;
-  sort?: 'latest' | 'oldest' | 'popular';
-  initialPage?: number;
-  limit?: number;
-}
-
-export function useAssets(options: UseAssetsOptions = {}) {
-  const [assets, setAssets] = useState<Asset[]>([]);
+export function useProjects(options: ProjectQueryParams = {}): UseProjects {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(options.initialPage || 1);
+  const [page, setPage] = useState(options.page || 1);
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
-  const fetchAssets = useCallback(async (reset = false) => {
+  const fetchProjects = useCallback(async (reset = false) => {
     try {
       const currentPage = reset ? 1 : page;
       
       if (reset) {
         setIsLoading(true);
-        setAssets([]);
+        setProjects([]);
       } else if (currentPage > 1) {
         setIsLoadingMore(true);
       }
       
-      const response = await api.assets.getAll({
+      const response = await api.projects.getAll({
         page: currentPage,
         limit: options.limit || 10,
         userId: options.userId,
-        projectId: options.projectId,
-        type: options.type,
-        tag: options.tag,
+        username: options.username,
         search: options.search,
         sort: options.sort || 'latest',
       });
       
-      const newAssets = response.assets.map(normalizeAsset);
+      const newProjects = response.projects;
       
       if (reset || currentPage === 1) {
-        setAssets(newAssets);
+        setProjects(newProjects);
       } else {
-        setAssets(prev => [...prev, ...newAssets]);
+        setProjects(prev => [...prev, ...newProjects]);
       }
       
       setPage(currentPage);
@@ -61,9 +47,9 @@ export function useAssets(options: UseAssetsOptions = {}) {
       setHasMore(currentPage < response.pagination.totalPages);
       setError(null);
     } catch (err) {
-      console.error('Error fetching assets:', err);
-      setError(err instanceof ApiError ? err.message : 'Failed to load assets');
-      toast.error('Failed to load assets');
+      console.error('Error fetching projects:', err);
+      setError(err instanceof ApiError ? err.message : 'Failed to load projects');
+      toast.error('Failed to load projects');
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -78,16 +64,14 @@ export function useAssets(options: UseAssetsOptions = {}) {
   
   const reload = useCallback(() => {
     setPage(1);
-    fetchAssets(true);
-  }, [fetchAssets]);
+    fetchProjects(true);
+  }, [fetchProjects]);
   
   useEffect(() => {
-    fetchAssets(true);
+    fetchProjects(true);
   }, [
     options.userId,
-    options.projectId,
-    options.type,
-    options.tag,
+    options.username,
     options.search,
     options.sort,
     options.limit,
@@ -95,12 +79,12 @@ export function useAssets(options: UseAssetsOptions = {}) {
   
   useEffect(() => {
     if (page > 1) {
-      fetchAssets(false);
+      fetchProjects(false);
     }
-  }, [page, fetchAssets]);
+  }, [page, fetchProjects]);
   
   return {
-    assets,
+    projects,
     isLoading,
     error,
     page,
