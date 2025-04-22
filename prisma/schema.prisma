@@ -1,0 +1,264 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id                String         @id @default(cuid())
+  name              String?
+  username          String?        @unique
+  email             String?        @unique
+  emailVerified     DateTime?
+  image             String?
+  bio               String?        @db.Text
+  bannerImage       String?
+  location          String?
+  role              UserRole       @default(USER)
+  subscriptionTier  SubscriptionTier @default(FREE)
+  subscriptionId    String?
+  subscriptionStart DateTime?
+  subscriptionEnd   DateTime?
+  social            Json?          // Stores social media links as JSON
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  projects    Project[]
+  assets      Asset[]
+  followers   Follow[]        @relation("Following")
+  following   Follow[]        @relation("Followers")
+  sentMessages     Message[]       @relation("SentMessages")
+  receivedMessages Message[]       @relation("ReceivedMessages")
+  chats       UserChat[]
+  likes       Like[]
+  comments    Comment[]
+  notifications Notification[]  @relation("ReceivedNotifications")
+  sentNotifications Notification[] @relation("SentNotifications")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  PREMIUM
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  thumbnail   String?
+  userId      String
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets Asset[]
+  likes  Like[]
+
+  @@index([userId])
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  fileUrl     String
+  fileType    AssetType
+  projectId   String?
+  userId      String
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tags        String[]
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  likes    Like[]
+  comments Comment[]
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+enum AssetType {
+  IMAGE
+  MODEL_3D
+  AUDIO
+  VIDEO
+  DOCUMENT
+  OTHER
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants UserChat[]
+  messages     Message[]
+}
+
+model UserChat {
+  userId String
+  chatId String
+  joinedAt DateTime @default(now())
+  hasUnread Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@id([userId, chatId])
+  @@index([userId])
+  @@index([chatId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  chatId    String
+  senderId  String
+  receiverId String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  chat    Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender  User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String?
+  projectId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset   Asset?   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([assetId])
+  @@index([projectId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  assetId   String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset  Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  parent Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([parentId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  content     String
+  linkUrl     String?
+  read        Boolean          @default(false)
+  receiverId  String
+  senderId    String?
+  createdAt   DateTime         @default(now())
+
+  receiver User @relation("ReceivedNotifications", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User? @relation("SentNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([receiverId])
+  @@index([senderId])
+}
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  COMMENT
+  MESSAGE
+  SYSTEM
+}
+
+// For tracking payments/subscriptions
+model Subscription {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  stripePriceId String?
+  stripeCurrentPeriodEnd DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
