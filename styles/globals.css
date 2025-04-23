@@ -1,7 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js"; /* adjust path if needed */
 
+
+/* ===================================
+   Root Theme Variables (Light & Dark)
+=================================== */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -10,20 +13,27 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
+
     --primary: 262 62% 55%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
+
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 262 62% 55%;
     --radius: 0.5rem;
+
+    --pixelshelf-primary: #6c46d6;
+    --pixelshelf-accent: #5f3dc4;
   }
 
   .dark {
@@ -33,52 +43,75 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
+
     --primary: 262 62% 55%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
+
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
+
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 262 62% 55%;
   }
 }
 
+/* ============================
+   Base Element Styling
+============================ */
 @layer base {
-  * {
+  *,
+  ::before,
+  ::after {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Custom scrollbar for the pixel art aesthetic */
+/* ============================
+   Utilities (Custom classes)
+============================ */
+@layer utilities {
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+}
+
+/* ============================
+   Scrollbar Styling
+============================ */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: theme('colors.background');
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: theme('colors.pixelshelf.primary');
+  background: var(--pixelshelf-primary);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: theme('colors.pixelshelf.accent');
+  background: var(--pixelshelf-accent);
 }
 
-/* Custom animations */
+/* ============================
+   Custom Animations
+============================ */
 @keyframes pixel-fade-in {
   0% {
     opacity: 0;
@@ -94,7 +127,9 @@
   animation: pixel-fade-in 0.3s ease-in-out forwards;
 }
 
-/* Custom utility classes */
+/* ============================
+   Custom Utility Classes
+============================ */
 .grid-masonry {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
