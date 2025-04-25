@@ -154,7 +154,7 @@ export default function NotificationsPage() {
     } else if (status === 'unauthenticated') {
       router.push('/login');
     }
-  }, [status]);
+  }, [status, router]);
 
   // Check for authentication
   if (status === 'loading') {

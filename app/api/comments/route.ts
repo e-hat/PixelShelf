@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth/auth-options';
+import { Prisma } from '@prisma/client';
 
 // Schema for GET request query params
 const getCommentsQuerySchema = z.object({
@@ -63,7 +64,10 @@ export async function GET(req: NextRequest) {
     }
     
     // Determine sort order
-    const orderBy = { createdAt: sort === 'latest' ? 'desc' : 'asc' };
+    const orderBy = {
+      createdAt: sort === 'latest' ? 'desc' as const : 'asc' as const,
+    };
+    
     
     // Get total count for pagination
     const totalCount = await prisma.comment.count({

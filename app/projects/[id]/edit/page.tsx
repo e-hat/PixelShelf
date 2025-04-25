@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { SubmitHandler, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { use, useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -18,126 +18,117 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { FileUploader } from '@/components/ui/file-uploader';
-import { api, ApiError } from '@/lib/api/api-client';
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileUploader } from "@/components/ui/file-uploader";
+import { api, ApiError } from "@/lib/api/api-client";
 
 // Form schema
 const formSchema = z.object({
-  title: z.string().min(3, { message: 'Title must be at least 3 characters.' }),
+  title: z.string().min(3, { message: "Title must be at least 3 characters." }),
   description: z.string().optional(),
   thumbnail: z.string().optional(),
   isPublic: z.boolean(),
 });
-
 type FormValues = z.infer<typeof formSchema>;
 
+// Tell TypeScript that Next will hand us a Promise for params
 interface EditProjectPageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;
 }
 
 export default function EditProjectPage({ params }: EditProjectPageProps) {
+  // unwrap the promised params
+  const { id } = use(params);
+
   const { data: session, status } = useSession();
   const router = useRouter();
+
   const [project, setProject] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Set up form
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: '',
-      description: '',
-      thumbnail: '',
+      title: "",
+      description: "",
+      thumbnail: "",
       isPublic: false,
     },
   });
-  
-  // Fetch project data
+
   useEffect(() => {
-    const fetchProject = async () => {
+    // because this is a client component, we can still do side-effects
+    async function fetchProject() {
+      if (status === "unauthenticated") {
+        router.push("/login");
+        return;
+      }
+      if (status === "loading") {
+        return;
+      }
+
       try {
-        // Check authentication
-        if (status === 'unauthenticated') {
-          router.push('/login');
-          return;
-        }
-        
-        if (status === 'loading') {
-          return;
-        }
-        
-        // Fetch project
-        const projectData = await api.projects.getById(params.id);
+        const projectData = await api.projects.getById(id);
         setProject(projectData);
-        
-        // Check ownership
+
         if (session?.user?.id !== projectData.userId) {
-          toast.error('You do not have permission to edit this project');
-          router.push(`/u/${projectData.user.username}/projects/${params.id}`);
+          toast.error("You do not have permission to edit this project");
+          router.push(`/u/${projectData.user.username}/projects/${id}`);
           return;
         }
-        
-        // Set form values
+
         form.reset({
           title: projectData.title,
-          description: projectData.description || '',
-          thumbnail: projectData.thumbnail || '',
+          description: projectData.description ?? "",
+          thumbnail: projectData.thumbnail ?? "",
           isPublic: projectData.isPublic,
         });
       } catch (error) {
-        console.error('Error fetching project:', error);
+        console.error("Error fetching project:", error);
         if (error instanceof ApiError && error.status === 404) {
-          toast.error('Project not found');
-          router.push('/');
+          toast.error("Project not found");
+          router.push("/");
         } else {
-          toast.error('Failed to load project details');
+          toast.error("Failed to load project details");
         }
       } finally {
         setIsLoading(false);
       }
-    };
-    
+    }
+
     fetchProject();
-  }, [params.id, router, session, status, form]);
-  
-  // Handle form submission
+  }, [id, router, session, status, form]);
+
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
-    
     try {
-      // Update project
-      await api.projects.update(params.id, {
+      await api.projects.update(id, {
         title: values.title,
         description: values.description,
         thumbnail: values.thumbnail,
         isPublic: values.isPublic,
       });
-      
-      toast.success('Project updated successfully');
-      
-      // Redirect to project page
-      if (session?.user?.username) {
-        router.push(`/u/${session.user.username}/projects/${params.id}`);
-      } else {
-        router.push('/');
-      }
-      
+      toast.success("Project updated successfully");
+      router.push(
+        session?.user?.username
+          ? `/u/${session.user.username}/projects/${id}`
+          : "/"
+      );
       router.refresh();
     } catch (error) {
-      console.error('Error updating project:', error);
-      toast.error(error instanceof ApiError ? error.message : 'Failed to update project');
+      console.error("Error updating project:", error);
+      toast.error(
+        error instanceof ApiError ? error.message : "Failed to update project"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
-  
+
   if (isLoading) {
     return (
       <div className="container max-w-3xl mx-auto py-12 px-4">
@@ -147,7 +138,7 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
       </div>
     );
   }
-  
+
   if (!project) {
     return (
       <div className="container max-w-3xl mx-auto py-12 px-4">
@@ -156,18 +147,19 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
           <p className="text-muted-foreground mb-8">
             The project you are looking for could not be found.
           </p>
-          <Button onClick={() => router.push('/')}>Return to Home</Button>
+          <Button onClick={() => router.push("/")}>Return to Home</Button>
         </div>
       </div>
     );
   }
-  
+
   return (
     <div className="container max-w-3xl mx-auto py-12 px-4">
       <h1 className="text-3xl font-bold mb-8">Edit Project</h1>
-      
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          {/* title */}
           <FormField
             control={form.control}
             name="title"
@@ -181,7 +173,8 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
               </FormItem>
             )}
           />
-          
+
+          {/* description */}
           <FormField
             control={form.control}
             name="description"
@@ -199,7 +192,8 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
               </FormItem>
             )}
           />
-          
+
+          {/* thumbnail */}
           <FormField
             control={form.control}
             name="thumbnail"
@@ -221,7 +215,8 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
               </FormItem>
             )}
           />
-          
+
+          {/* isPublic */}
           <FormField
             control={form.control}
             name="isPublic"
@@ -236,24 +231,26 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
                 <div className="space-y-1 leading-none">
                   <FormLabel>Make this project public</FormLabel>
                   <FormDescription>
-                    Public projects appear in feeds and search results. Private projects are only visible to you.
+                    Public projects appear in feeds and search results. Private
+                    projects are only visible to you.
                   </FormDescription>
                 </div>
               </FormItem>
             )}
           />
-          
+
+          {/* buttons */}
           <div className="flex justify-end space-x-4">
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                if (session?.user?.username) {
-                  router.push(`/u/${session.user.username}/projects/${params.id}`);
-                } else {
-                  router.push('/');
-                }
-              }}
+              onClick={() =>
+                router.push(
+                  session?.user?.username
+                    ? `/u/${session.user.username}/projects/${id}`
+                    : "/"
+                )
+              }
             >
               Cancel
             </Button>
@@ -264,7 +261,7 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
                   Saving...
                 </>
               ) : (
-                'Save Changes'
+                "Save Changes"
               )}
             </Button>
           </div>

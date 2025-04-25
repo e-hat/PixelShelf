@@ -1,62 +1,67 @@
+// app/api/users/[username]/following/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 
-// GET /api/users/[username]/following - Get users the specified user is following
+type RouteParams = { username: string };
+type Props = { params: Promise<RouteParams> };
+
+// GET /api/users/[username]/following — Paginated list of users that the specified user is following
 export async function GET(
   req: NextRequest,
-  { params }: { params: { username: string } }
+  { params }: Props
 ) {
+  const { username } = await params;
+
   try {
-    const { username } = params;
-    const url = new URL(req.url);
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '10');
-    
-    // Find the user
+    const url   = new URL(req.url);
+    const page  = parseInt(url.searchParams.get('page')  || '1',  10);
+    const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+
+    // Lookup the user by username
     const user = await prisma.user.findUnique({
       where: { username },
       select: { id: true },
     });
-    
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       );
     }
-    
-    // Get total count
+
+    // Total count of follows
     const totalCount = await prisma.follow.count({
       where: { followerId: user.id },
     });
-    
-    // Get following users with pagination
-    const following = await prisma.follow.findMany({
+
+    // Fetch paginated follow records
+    const followRows = await prisma.follow.findMany({
       where: { followerId: user.id },
+      orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
       include: {
         following: {
           select: {
-            id: true,
-            name: true,
+            id:       true,
+            name:     true,
             username: true,
-            image: true,
-            bio: true,
+            image:    true,
+            bio:      true,
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
     });
-    
-    // Format response
-    const formattedFollowing = following.map((follow: { following: any; createdAt: any; }) => ({
-      ...follow.following,
-      followedAt: follow.createdAt,
+
+    // Format the "following" users
+    const following = followRows.map((row: { following: any; createdAt: any; }) => ({
+      ...row.following,
+      followedAt: row.createdAt,
     }));
-    
+
     return NextResponse.json({
-      following: formattedFollowing,
+      following,
       pagination: {
         page,
         limit,

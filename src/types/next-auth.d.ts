@@ -21,3 +21,14 @@ declare module "next-auth" {
     subscriptionTier: string;
   }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    name: string;
+    email: string;
+    picture: string;
+    username: string;
+    subscriptionTier: SubscriptionTier;
+  }
+}

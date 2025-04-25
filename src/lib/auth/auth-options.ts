@@ -8,6 +8,11 @@ import GithubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
+// Extend the Prisma User type to include the password field
+type UserWithPassword = AppUser & {
+  password?: string | null;
+};
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
@@ -43,7 +48,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
-        });
+        }) as UserWithPassword | null;
 
         if (!user || !user.password) {
           throw new Error("Invalid credentials");
@@ -60,12 +65,12 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image,
-          username: user.username,
+          name: user.name || "",
+          email: user.email || "",
+          image: user.image || "",
+          username: user.username || "",
           subscriptionTier: user.subscriptionTier,
-        };
+        } as User;
       },
     }),
   ],
@@ -103,10 +108,10 @@ export const authOptions: NextAuthOptions = {
 
         if (dbUser) {
           token.id = dbUser.id;
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.picture = dbUser.image;
-          token.username = dbUser.username;
+          token.name = dbUser.name || "";
+          token.email = dbUser.email || "";
+          token.picture = dbUser.image || "";
+          token.username = dbUser.username || "";
           token.subscriptionTier = dbUser.subscriptionTier;
         }
       }

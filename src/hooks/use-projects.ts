@@ -70,6 +70,7 @@ export function useProjects(options: ProjectQueryParams = {}): UseProjects {
   useEffect(() => {
     fetchProjects(true);
   }, [
+    fetchProjects,
     options.userId,
     options.username,
     options.search,

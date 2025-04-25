@@ -118,6 +118,35 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       setIsLoadingMessages(false);
     }
   }, [chats, session?.user?.id]);
+
+  // Mark a chat as read
+  const markChatAsRead = useCallback(async (chatId: string) => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // In a real app, this would call the API to mark chat as read
+      // For MVP, we'll update the state directly
+      
+      // Update the chat in the list
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === chatId 
+            ? { ...chat, unreadCount: 0 } 
+            : chat
+        )
+      );
+      
+      // Check if there are any unread chats left
+      const hasUnread = chats.some(chat => 
+        chat.id !== chatId && chat.unreadCount && chat.unreadCount > 0
+      );
+      
+      setHasNewMessages(hasUnread);
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+      // No need to show toast for this error
+    }
+  }, [chats, session?.user?.id, setHasNewMessages]);
   
   // Select a chat and load its messages
   const selectChat = useCallback((chatId: string) => {
@@ -136,7 +165,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     if (chat.unreadCount && chat.unreadCount > 0) {
       markChatAsRead(chatId);
     }
-  }, [chats, fetchMessages]);
+  }, [chats, fetchMessages, markChatAsRead]);
   
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
@@ -268,35 +297,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       setIsLoadingChats(false);
     }
   }, [chats, selectChat, session?.user?.id]);
-  
-  // Mark a chat as read
-  const markChatAsRead = useCallback(async (chatId: string) => {
-    if (!session?.user?.id) return;
-    
-    try {
-      // In a real app, this would call the API to mark chat as read
-      // For MVP, we'll update the state directly
-      
-      // Update the chat in the list
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === chatId 
-            ? { ...chat, unreadCount: 0 } 
-            : chat
-        )
-      );
-      
-      // Check if there are any unread chats left
-      const hasUnread = chats.some(chat => 
-        chat.id !== chatId && chat.unreadCount && chat.unreadCount > 0
-      );
-      
-      setHasNewMessages(hasUnread);
-    } catch (error) {
-      console.error('Error marking chat as read:', error);
-      // No need to show toast for this error
-    }
-  }, [chats, session?.user?.id, setHasNewMessages]);
   
   // Refresh chats
   const refreshChats = useCallback(async () => {

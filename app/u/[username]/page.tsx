@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -142,28 +142,33 @@ const MOCK_PROJECTS = [
   },
 ];
 
-export default function UserProfilePage({ params }: PageProps) {
+type Params = Promise<{ username: string }>;
+
+export default function UserProfilePage({ params }: { params: Params }) {
+  // unwrap the promised params
+  const { username } = use(params);
+
   const { data: session } = useSession();
   const [user, setUser] = useState(MOCK_USER);
-  const [activeTab, setActiveTab] = useState('assets');
+  const [activeTab, setActiveTab] = useState<"assets" | "projects">("assets");
   const [isFollowing, setIsFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(user.followers);
-  
-  const isOwnProfile = session?.user?.name?.toLowerCase() === params.username.toLowerCase();
+
+  const isOwnProfile =
+    session?.user?.name?.toLowerCase() === username.toLowerCase();
 
   const handleFollow = () => {
     if (isFollowing) {
-      setFollowerCount(followerCount - 1);
+      setFollowerCount((c) => c - 1);
       toast.success(`Unfollowed ${user.name}`);
     } else {
-      setFollowerCount(followerCount + 1);
+      setFollowerCount((c) => c + 1);
       toast.success(`Following ${user.name}`);
     }
-    setIsFollowing(!isFollowing);
+    setIsFollowing((f) => !f);
   };
 
   const handleMessage = () => {
-    // In a real app, this would create or navigate to an existing chat
     toast.success(`Started a chat with ${user.name}`);
   };
 
@@ -181,8 +186,8 @@ export default function UserProfilePage({ params }: PageProps) {
           />
         )}
         {isOwnProfile && (
-          <Link 
-            href="/settings/profile" 
+          <Link
+            href="/settings/profile"
             className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm p-2 rounded-full shadow-md hover:bg-background/100 transition-colors"
           >
             <Edit className="h-4 w-4" />
@@ -214,7 +219,7 @@ export default function UserProfilePage({ params }: PageProps) {
             )}
           </div>
 
-          {/* Profile details */}
+          {/* Details */}
           <div className="flex-1 pt-0 md:pt-8">
             <div className="flex flex-col md:flex-row justify-between items-start mb-4">
               <div>
@@ -231,25 +236,20 @@ export default function UserProfilePage({ params }: PageProps) {
                 </div>
               </div>
 
-              {!isOwnProfile && (
+              {!isOwnProfile ? (
                 <div className="flex space-x-2 mt-2 md:mt-0">
-                  <Button 
-                    variant={isFollowing ? "outline" : "pixel"} 
+                  <Button
+                    variant={isFollowing ? "outline" : "pixel"}
                     onClick={handleFollow}
                   >
-                    {isFollowing ? 'Following' : 'Follow'}
+                    {isFollowing ? "Following" : "Follow"}
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleMessage}
-                  >
+                  <Button variant="outline" onClick={handleMessage}>
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Message
                   </Button>
                 </div>
-              )}
-
-              {isOwnProfile && (
+              ) : (
                 <div className="mt-2 md:mt-0">
                   <Link href="/settings/profile">
                     <Button variant="outline">
@@ -264,13 +264,13 @@ export default function UserProfilePage({ params }: PageProps) {
             {/* Bio */}
             <p className="text-foreground mb-4 max-w-3xl">{user.bio}</p>
 
-            {/* Social links and stats */}
+            {/* Social & Stats */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap gap-3 mb-4 md:mb-0">
                 {user.social?.website && (
-                  <a 
-                    href={`https://${user.social.website}`} 
-                    target="_blank" 
+                  <a
+                    href={`https://${user.social.website}`}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
@@ -279,9 +279,9 @@ export default function UserProfilePage({ params }: PageProps) {
                   </a>
                 )}
                 {user.social?.twitter && (
-                  <a 
-                    href={`https://twitter.com/${user.social.twitter}`} 
-                    target="_blank" 
+                  <a
+                    href={`https://twitter.com/${user.social.twitter}`}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
@@ -290,9 +290,9 @@ export default function UserProfilePage({ params }: PageProps) {
                   </a>
                 )}
                 {user.social?.github && (
-                  <a 
-                    href={`https://github.com/${user.social.github}`} 
-                    target="_blank" 
+                  <a
+                    href={`https://github.com/${user.social.github}`}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
@@ -306,11 +306,15 @@ export default function UserProfilePage({ params }: PageProps) {
                 <div className="flex items-center">
                   <Users className="h-4 w-4 mr-1 text-muted-foreground" />
                   <span className="font-semibold mr-1">{followerCount}</span>
-                  <span className="text-muted-foreground text-sm">Followers</span>
+                  <span className="text-muted-foreground text-sm">
+                    Followers
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <span className="font-semibold mr-1">{user.following}</span>
-                  <span className="text-muted-foreground text-sm">Following</span>
+                  <span className="text-muted-foreground text-sm">
+                    Following
+                  </span>
                 </div>
                 <div className="text-sm text-muted-foreground">
                   Joined {formatDate(user.createdAt)}
@@ -320,63 +324,62 @@ export default function UserProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Content tabs */}
+        {/* Tabs */}
         <Tabs defaultValue="assets" className="mb-8">
           <TabsList className="border-b pb-0 mb-4 w-full flex justify-start">
-            <TabsTrigger 
-              value="assets" 
+            <TabsTrigger
+              value="assets"
               className="pb-2 px-4 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-pixelshelf-primary"
-              onClick={() => setActiveTab('assets')}
+              onClick={() => setActiveTab("assets")}
             >
               <Grid className="h-4 w-4 mr-2" />
               Assets
             </TabsTrigger>
-            <TabsTrigger 
-              value="projects" 
+            <TabsTrigger
+              value="projects"
               className="pb-2 px-4 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-pixelshelf-primary"
-              onClick={() => setActiveTab('projects')}
+              onClick={() => setActiveTab("projects")}
             >
               <FolderKanban className="h-4 w-4 mr-2" />
               Projects
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="assets" className="space-y-4">
-            {/* Filter dropdown - would be functional in full app */}
             <div className="flex justify-end mb-4">
-              <div className="relative">
-                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground">
-                  <span>Recent</span>
-                  <ChevronDown className="h-4 w-4 ml-1" />
-                </button>
-              </div>
+              <button className="flex items-center text-sm text-muted-foreground hover:text-foreground">
+                <span>Recent</span>
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </button>
             </div>
-            
-            {/* Assets grid */}
             <div className="grid-masonry">
               {MOCK_ASSETS.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} />
               ))}
             </div>
           </TabsContent>
-          
+
           <TabsContent value="projects" className="space-y-4">
-            {/* Projects grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {MOCK_PROJECTS.map((project) => (
-                <ProjectCard key={project.id} project={project} username={user.username} />
+              {MOCK_PROJECTS.map((proj) => (
+                <ProjectCard
+                  key={proj.id}
+                  project={proj}
+                  username={user.username}
+                />
               ))}
 
-              {/* Add project card for user's own profile */}
               {isOwnProfile && (
-                <Link 
+                <Link
                   href="/projects/new"
                   className="border-2 border-dashed rounded-lg border-muted hover:border-pixelshelf-primary p-6 flex flex-col items-center justify-center text-center min-h-[300px] transition-colors"
                 >
                   <div className="rounded-full bg-muted p-3 mb-4">
                     <FolderKanban className="h-6 w-6 text-muted-foreground" />
                   </div>
-                  <h3 className="text-lg font-medium mb-2">Create a New Project</h3>
+                  <h3 className="text-lg font-medium mb-2">
+                    Create a New Project
+                  </h3>
                   <p className="text-sm text-muted-foreground">
                     Organize your assets into a project to showcase your work
                   </p>

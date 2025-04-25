@@ -1,269 +1,174 @@
+// app/upload/page.tsx
 'use client';
 
-import { useState, useRef } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Upload, 
-  X, 
-  Image as ImageIcon, 
-  Music, 
-  FileVideo, 
-  Box, 
-  FileText, 
+import { Checkbox } from '@/components/ui/checkbox';
+import { FileUploader } from '@/components/ui/file-uploader';
+import { Separator } from '@/components/ui/separator';
+import { ASSET_TYPES, ASSET_TYPE_NAMES } from '@/constants';
+import { api, ApiError } from '@/lib/api/api-client';
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Upload,
+  ImageIcon,
+  FileAudio,
+  FileVideo,
+  Box,
+  FileText,
   Loader2,
-  FolderKanban 
+  FolderKanban,
+  InfoIcon,
 } from 'lucide-react';
-import { getAssetTypeFromUrl } from '@/lib/utils';
 
-// Mock project data for MVP
-const MOCK_PROJECTS = [
-  { id: '1', title: 'Woodland Warriors' },
-  { id: '2', title: 'Cosmic Drifter' },
-];
-
-const uploadSchema = z.object({
+const uploadInputSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters' }),
   description: z.string().optional(),
+  fileUrl: z.string().min(1, { message: 'Please upload a file' }),
+  fileType: z.nativeEnum(ASSET_TYPES),
   projectId: z.string().optional(),
-  tags: z.string().optional(),
   isPublic: z.boolean(),
+  tags: z.string().optional(),
 });
 
-type UploadFormValues = z.infer<typeof uploadSchema>;
+// Form schema with validation
+const uploadSchema = uploadInputSchema.transform((data) => ({
+  ...data,
+  tags: data.tags
+    ? data.tags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean)
+    : [],
+}));
+
+type UploadFormValues = z.infer<typeof uploadInputSchema>;
 
 export default function UploadPage() {
-  const { data: session } = useSession();
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [fileType, setFileType] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
+  const [isLoading, setIsLoading] = useState(true);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [selectedFileType, setSelectedFileType] = useState<keyof typeof ASSET_TYPES>('IMAGE');
+  
+  // Get projectId from query params if present
+  const projectIdParam = searchParams?.get('projectId');
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadSchema),
+  // Initialize form with default values
+  const form = useForm<UploadFormValues>({
+    resolver: zodResolver(uploadInputSchema),
     defaultValues: {
+      title: '',
+      description: '',
+      fileUrl: '',
+      fileType: 'IMAGE',
+      projectId: projectIdParam || undefined,
       isPublic: true,
+      tags: '',
     },
   });
 
-  // In a real app, this would handle the actual file upload
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  // Load user's projects when session is available
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        if (status === 'authenticated' && session.user.id) {
+          const response = await api.projects.getAll({ 
+            userId: session.user.id,
+            limit: 100
+          });
+          setProjects(response.projects);
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        toast.error('Failed to load projects');
+        setIsLoading(false);
+      }
+    };
 
-    // Check file size (limit to 10MB for MVP)
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
-      return;
+    if (status !== 'loading') {
+      fetchProjects();
     }
+  }, [session, status]);
 
-    setFile(selectedFile);
-
-    // Determine file type
-    const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase() || '';
-    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-    const audioExtensions = ['mp3', 'wav', 'ogg'];
-    const videoExtensions = ['mp4', 'webm', 'mov'];
-    const model3dExtensions = ['obj', 'fbx', 'glb', 'gltf'];
-    
-    if (imageExtensions.includes(fileExtension)) {
-      setFileType('IMAGE');
-      // Create image preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFilePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(selectedFile);
-    } else if (audioExtensions.includes(fileExtension)) {
-      setFileType('AUDIO');
-      setFilePreview(null);
-    } else if (videoExtensions.includes(fileExtension)) {
-      setFileType('VIDEO');
-      setFilePreview(null);
-    } else if (model3dExtensions.includes(fileExtension)) {
-      setFileType('MODEL_3D');
-      setFilePreview(null);
-    } else {
-      setFileType('DOCUMENT');
-      setFilePreview(null);
-    }
+  // Handle file type change
+  const handleFileTypeChange = (type: string) => {
+    setSelectedFileType(type as keyof typeof ASSET_TYPES);
+    form.setValue('fileType', type as keyof typeof ASSET_TYPES);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // Handle file upload
+  const handleFileUpload = (url?: string) => {
+    form.setValue('fileUrl', url ?? '');
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const droppedFile = e.dataTransfer.files?.[0];
-    if (!droppedFile) return;
-    
-    // Update the file input to reflect the dropped file
-    if (fileInputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(droppedFile);
-      fileInputRef.current.files = dataTransfer.files;
-      
-      // Trigger file change handler
-      const event = new Event('change', { bubbles: true });
-      fileInputRef.current.dispatchEvent(event);
-    }
-  };
-
-  const clearFile = () => {
-    setFile(null);
-    setFilePreview(null);
-    setFileType(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const renderFilePreview = () => {
-    if (!fileType) return null;
-
-    switch (fileType) {
-      case 'IMAGE':
-        return filePreview ? (
-          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-            <Image 
-              src={filePreview} 
-              alt="Preview" 
-              fill 
-              className="object-contain" 
-            />
-            <button 
-              onClick={clearFile}
-              className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm p-1 rounded-full"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null;
-      case 'AUDIO':
-        return (
-          <div className="aspect-video w-full flex items-center justify-center bg-muted rounded-md relative">
-            <Music className="h-16 w-16 text-muted-foreground" />
-            <div className="absolute top-2 right-2">
-              <button 
-                onClick={clearFile}
-                className="bg-background/80 backdrop-blur-sm p-1 rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        );
-      case 'VIDEO':
-        return (
-          <div className="aspect-video w-full flex items-center justify-center bg-muted rounded-md relative">
-            <FileVideo className="h-16 w-16 text-muted-foreground" />
-            <div className="absolute top-2 right-2">
-              <button 
-                onClick={clearFile}
-                className="bg-background/80 backdrop-blur-sm p-1 rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        );
-      case 'MODEL_3D':
-        return (
-          <div className="aspect-video w-full flex items-center justify-center bg-muted rounded-md relative">
-            <Box className="h-16 w-16 text-muted-foreground" />
-            <div className="absolute top-2 right-2">
-              <button 
-                onClick={clearFile}
-                className="bg-background/80 backdrop-blur-sm p-1 rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        );
-      case 'DOCUMENT':
-        return (
-          <div className="aspect-video w-full flex items-center justify-center bg-muted rounded-md relative">
-            <FileText className="h-16 w-16 text-muted-foreground" />
-            <div className="absolute top-2 right-2">
-              <button 
-                onClick={clearFile}
-                className="bg-background/80 backdrop-blur-sm p-1 rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
+  // Handle form submission
   const onSubmit = async (data: UploadFormValues) => {
-    if (!file) {
-      toast.error('Please select a file to upload');
-      return;
-    }
-
-    setIsUploading(true);
-
-    // In a real app, this would upload the file to storage and save metadata to the database
-    // For the MVP, we'll simulate a successful upload after a short delay
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      const tags = data.tags 
-        ? data.tags.split(',').map(tag => tag.trim()) 
-        : [];
-
-      // Mock asset data that would normally come from the API
-      const mockAssetData = {
-        id: Math.random().toString(36).substring(2, 9),
+      setIsLoading(true);
+      
+      const assetData = {
         title: data.title,
         description: data.description || '',
-        fileUrl: URL.createObjectURL(file), // In real app, this would be the URL from storage
-        fileType: fileType,
-        projectId: data.projectId || null,
-        userId: session?.user?.id || '',
+        fileUrl: data.fileUrl,
+        fileType: data.fileType,
+        projectId: data.projectId || undefined,
         isPublic: data.isPublic,
-        tags: tags,
-        createdAt: new Date(),
+        tags: Array.isArray(data.tags) ? data.tags : [],
       };
-
+      
+      const response = await api.assets.create(assetData);
+      
+      setUploadSuccess(true);
       toast.success('Asset uploaded successfully!');
       
       // Redirect to the asset page
-      router.push(`/assets/${mockAssetData.id}`);
+      setTimeout(() => {
+        router.push(`/assets/${response.id}`);
+      }, 1500);
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload asset. Please try again.');
+      console.error('Error uploading asset:', error);
+      toast.error(error instanceof ApiError ? error.message : 'Failed to upload asset');
     } finally {
-      setIsUploading(false);
+      setIsLoading(false);
     }
   };
 
-  if (!session) {
+  // Redirect to login if not authenticated
+  if (status === 'unauthenticated') {
     return (
       <div className="container max-w-4xl mx-auto px-4 py-12">
         <div className="flex flex-col items-center justify-center space-y-4 text-center">
@@ -282,138 +187,303 @@ export default function UploadPage() {
     );
   }
 
+  // Get the icon for the selected file type
+  const getFileTypeIcon = () => {
+    switch (selectedFileType) {
+      case 'IMAGE':
+        return <ImageIcon className="h-5 w-5" />;
+      case 'AUDIO':
+        return <FileAudio className="h-5 w-5" />;
+      case 'VIDEO':
+        return <FileVideo className="h-5 w-5" />;
+      case 'MODEL_3D':
+        return <Box className="h-5 w-5" />;
+      case 'DOCUMENT':
+        return <FileText className="h-5 w-5" />;
+      default:
+        return <File className="h-5 w-5" />;
+    }
+  };
+
+  // Get the file uploader type based on selected file type
+  const getUploaderType = () => {
+    switch (selectedFileType) {
+      case 'IMAGE':
+        return 'image';
+      case 'AUDIO':
+        return 'audio';
+      case 'VIDEO':
+        return 'video';
+      case 'MODEL_3D':
+        return 'model';
+      case 'DOCUMENT':
+        return 'pdf';
+      default:
+        return 'blob';
+    }
+  };
+
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold mb-8">Upload Asset</h1>
-      
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {/* File upload area */}
-        {!file ? (
-          <div 
-            className="border-2 border-dashed rounded-md p-12 text-center cursor-pointer hover:border-primary/50 transition-colors"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="flex flex-col items-center space-y-4">
-              <div className="p-4 bg-muted rounded-full">
-                <Upload className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-lg font-medium">Drag & drop your file here</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Support for images, audio, video, 3D models, and documents
-                </p>
-              </div>
-              <Button type="button" variant="outline">
-                Browse Files
-              </Button>
-            </div>
-            <input 
-              type="file" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileChange}
-              accept="image/*,audio/*,video/*,.obj,.fbx,.glb,.gltf,.pdf,.doc,.docx"
-            />
-          </div>
-        ) : (
-          renderFilePreview()
-        )}
-
-        {/* Asset details */}
-        {file && (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium mb-1">
-                Title <span className="text-destructive">*</span>
-              </label>
-              <Input 
-                id="title" 
-                {...register('title')} 
-                placeholder="Give your asset a name" 
-              />
-              {errors.title && (
-                <p className="text-sm text-destructive mt-1">{errors.title.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium mb-1">
-                Description
-              </label>
-              <Textarea 
-                id="description" 
-                {...register('description')} 
-                placeholder="Describe your asset (optional)" 
-                rows={4}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="projectId" className="block text-sm font-medium mb-1">
-                Project (optional)
-              </label>
-              <select 
-                id="projectId"
-                {...register('projectId')}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Not part of a project</option>
-                {MOCK_PROJECTS.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="tags" className="block text-sm font-medium mb-1">
-                Tags (comma-separated)
-              </label>
-              <Input 
-                id="tags" 
-                {...register('tags')} 
-                placeholder="pixel-art, characters, ui, etc." 
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Add relevant tags to help others discover your work
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isPublic"
-                {...register('isPublic')}
-                className="h-4 w-4 rounded border-gray-300 text-pixelshelf-primary focus:ring-pixelshelf-primary"
-              />
-              <label htmlFor="isPublic" className="text-sm font-medium">
-                Make this asset public (visible in feeds and search)
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* Submit button */}
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            variant="pixel"
-            disabled={!file || isUploading}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              'Upload Asset'
-            )}
-          </Button>
+    <div className="container max-w-4xl mx-auto px-4 py-8">
+      <div className="flex items-center mb-8">
+        <div className="flex-shrink-0 bg-pixelshelf-light p-3 rounded-full mr-4">
+          <Upload className="h-6 w-6 text-pixelshelf-primary" />
         </div>
-      </form>
+        <div>
+          <h1 className="text-3xl font-bold">Upload Asset</h1>
+          <p className="text-muted-foreground">
+            Share your work with other game developers
+          </p>
+        </div>
+      </div>
+
+      <Card className="mb-8">
+        <CardHeader className="pb-4">
+          <CardTitle>Select Asset Type</CardTitle>
+          <CardDescription>
+            Choose the type of asset you're uploading
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {Object.entries(ASSET_TYPES).map(([key, value]) => (
+              <button
+                key={key}
+                type="button"
+                className={`flex flex-col items-center justify-center p-4 rounded-lg border transition-all ${
+                  selectedFileType === value
+                    ? 'bg-pixelshelf-light border-pixelshelf-primary'
+                    : 'hover:bg-muted/50 hover:border-muted-foreground/20'
+                }`}
+                onClick={() => handleFileTypeChange(value)}
+              >
+                {value === 'IMAGE' && <ImageIcon className="h-8 w-8 mb-2" />}
+                {value === 'AUDIO' && <FileAudio className="h-8 w-8 mb-2" />}
+                {value === 'VIDEO' && <FileVideo className="h-8 w-8 mb-2" />}
+                {value === 'MODEL_3D' && <Box className="h-8 w-8 mb-2" />}
+                {value === 'DOCUMENT' && <FileText className="h-8 w-8 mb-2" />}
+                {value === 'OTHER' && <File className="h-8 w-8 mb-2" />}
+                <span className="text-sm font-medium">{ASSET_TYPE_NAMES[value]}</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload File</CardTitle>
+              <CardDescription>
+                Upload your {ASSET_TYPE_NAMES[selectedFileType].toLowerCase()} file
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="fileUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <FileUploader
+                        endpoint="assetUploader"
+                        fileType={getUploaderType()}
+                        value={field.value}
+                        onChange={handleFileUpload}
+                        label={`Upload ${ASSET_TYPE_NAMES[selectedFileType]}`}
+                        description={`Select or drag and drop your ${ASSET_TYPE_NAMES[selectedFileType].toLowerCase()} file`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Asset Details</CardTitle>
+              <CardDescription>
+                Provide information about your asset
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={`Enter a title for your ${ASSET_TYPE_NAMES[selectedFileType].toLowerCase()}`}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      A clear, descriptive title helps others find your work
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe your asset, its features, and how it can be used"
+                        {...field}
+                        rows={4}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Provide details about your asset, including tools used and special features
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tags</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="pixel-art, character, environment (comma-separated)"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Add relevant tags to help others discover your work
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project (Optional)</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a project (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">Not part of a project</SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Organize your asset by adding it to a project
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="isPublic"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Make this asset public</FormLabel>
+                      <FormDescription>
+                        Public assets are visible to everyone. Private assets are only visible to you.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+            <CardFooter className="flex justify-end">
+              <Button
+                type="submit"
+                variant="pixel"
+                disabled={isLoading || form.formState.isSubmitting || uploadSuccess}
+                className="min-w-[150px]"
+              >
+                {isLoading || form.formState.isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : uploadSuccess ? (
+                  <>
+                    <CheckIcon className="mr-2 h-4 w-4" />
+                    Uploaded!
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Asset
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
     </div>
   );
 }
+
+// Extra icon component
+const CheckIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M20 6L9 17l-5-5" />
+  </svg>
+);
+
+const File = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);

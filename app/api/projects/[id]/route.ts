@@ -1,26 +1,30 @@
+// app/api/projects/[id]/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth/auth-options';
 
-// Schema for PATCH request
+// Schema for validating PATCH request bodies
 const updateProjectSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').optional(),
   description: z.string().optional(),
-  thumbnail: z.string().optional().nullable(),
+  thumbnail: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
 });
 
-// GET /api/projects/[id] - Fetch a single project by ID
+type RouteParams = { id: string };
+type Props = { params: Promise<RouteParams> };
+
+// GET /api/projects/[id] — Fetch a single project by ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: Props
 ) {
+  const { id } = await params;
+
   try {
-    const { id } = params;
-    
-    // Find the project
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
@@ -33,9 +37,7 @@ export async function GET(
           },
         },
         assets: {
-          orderBy: {
-            createdAt: 'desc',
-          },
+          orderBy: { createdAt: 'desc' },
           include: {
             user: {
               select: {
@@ -46,56 +48,47 @@ export async function GET(
               },
             },
             _count: {
-              select: {
-                likes: true,
-                comments: true,
-              },
+              select: { likes: true, comments: true },
             },
           },
         },
         likes: {
-          select: {
-            userId: true,
-          },
+          select: { userId: true },
         },
         _count: {
-          select: {
-            likes: true,
-            assets: true,
-          },
+          select: { likes: true, assets: true },
         },
       },
     });
-    
+
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
-    
-    // Check if the project is private and if the current user has access
+
+    // Enforce privacy
     if (!project.isPublic) {
       const session = await getServerSession(authOptions);
-      
-      // If not logged in or not the owner, deny access
-      if (!session || session.user.id !== project.userId) {
+      if (!session?.user || session.user.id !== project.userId) {
         return NextResponse.json(
           { error: 'You do not have permission to view this project' },
           { status: 403 }
         );
       }
     }
-    
-    // Format the response
+
+    // Format assets
     const formattedAssets = project.assets.map((asset: { _count: { likes: any; comments: any; }; }) => ({
       ...asset,
       likes: asset._count.likes,
       comments: asset._count.comments,
       _count: undefined,
     }));
-    
-    const formattedProject = {
+
+    // Build formatted project
+    const formattedProject: any = {
       ...project,
       assets: formattedAssets,
       likes: project._count.likes,
@@ -103,13 +96,15 @@ export async function GET(
       likedByUser: false,
       _count: undefined,
     };
-    
-    // Check if the current user has liked the project
+
+    // Mark likedByUser
     const session = await getServerSession(authOptions);
-    if (session && session.user) {
-      formattedProject.likedByUser = project.likes.some((like: { userId: string; }) => like.userId === session.user.id);
+    if (session?.user) {
+      formattedProject.likedByUser = project.likes.some(
+        ( like: { userId: string; }) => like.userId === session.user.id
+      );
     }
-    
+
     return NextResponse.json(formattedProject);
   } catch (error) {
     console.error('Error fetching project:', error);
@@ -120,62 +115,56 @@ export async function GET(
   }
 }
 
-// PATCH /api/projects/[id] - Update a project
+// PATCH /api/projects/[id] — Update a project
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: Props
 ) {
+  const { id } = await params;
+
   try {
-    const { id } = params;
     const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
-    
-    // Find the project
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
-    
+
+    const project = await prisma.project.findUnique({ where: { id } });
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
-    
-    // Check if the user has permission to update this project
     if (project.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'You do not have permission to update this project' },
         { status: 403 }
       );
     }
-    
-    // Validate the request body
+
     const body = await req.json();
-    const validatedData = updateProjectSchema.safeParse(body);
-    
-    if (!validatedData.success) {
+    const parsed = updateProjectSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request data', details: validatedData.error.errors },
+        { error: 'Invalid request data', details: parsed.error.errors },
         { status: 400 }
       );
     }
-    
-    const { title, description, thumbnail, isPublic } = validatedData.data;
-    
-    // Update the project
+
+    const { title, description, thumbnail, isPublic } = parsed.data;
+
     const updatedProject = await prisma.project.update({
       where: { id },
       data: {
         title: title ?? project.title,
         description: description ?? project.description,
-        thumbnail: thumbnail === null ? null : thumbnail ?? project.thumbnail,
+        thumbnail:
+          thumbnail === null
+            ? null
+            : thumbnail ?? project.thumbnail,
         isPublic: isPublic ?? project.isPublic,
       },
       include: {
@@ -189,7 +178,7 @@ export async function PATCH(
         },
       },
     });
-    
+
     return NextResponse.json(updatedProject);
   } catch (error) {
     console.error('Error updating project:', error);
@@ -200,47 +189,37 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/projects/[id] - Delete a project
+// DELETE /api/projects/[id] — Delete a project
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: Props
 ) {
+  const { id } = await params;
+
   try {
-    const { id } = params;
     const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
-    
-    // Find the project
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
-    
+
+    const project = await prisma.project.findUnique({ where: { id } });
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
-    
-    // Check if the user has permission to delete this project
     if (project.userId !== session.user.id) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this project' },
         { status: 403 }
       );
     }
-    
-    // Delete the project (this will also remove the project ID from associated assets)
-    await prisma.project.delete({
-      where: { id },
-    });
-    
+
+    await prisma.project.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting project:', error);

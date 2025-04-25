@@ -25,15 +25,26 @@ import SubscriptionButton from '@/components/feature-specific/subscription-butto
 import { User } from '@/types';
 
 // Mock user data for the MVP
-const MOCK_USER: User = {
+const MOCK_USER = {
   id: '1',
   name: 'Alex Johnson',
   email: 'alex@example.com',
+  username: 'alexj',
+  image: null,
+  bio: null,
+  bannerImage: null,
+  location: null,
+  role: 'USER',
   subscriptionTier: 'FREE',
   subscriptionId: null,
   subscriptionStart: null,
   subscriptionEnd: null,
-};
+  social: undefined,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+} as User;
+
+
 
 
 export default function SubscriptionPage() {

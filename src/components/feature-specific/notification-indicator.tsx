@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Bell } from 'lucide-react';
@@ -16,7 +16,7 @@ export default function NotificationIndicator({ className }: NotificationIndicat
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch unread notification count
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     if (!session) return;
     
     try {
@@ -33,7 +33,7 @@ export default function NotificationIndicator({ className }: NotificationIndicat
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [session]);
 
   // Fetch notifications on mount and set up a polling interval
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function NotificationIndicator({ className }: NotificationIndicat
     } else {
       setIsLoading(false);
     }
-  }, [status, session]);
+  }, [status, session, fetchUnreadCount]);
 
   if (status !== 'authenticated' || isLoading) {
     return (

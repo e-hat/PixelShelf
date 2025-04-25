@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
@@ -44,7 +44,7 @@ export function FollowersDialog({
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [loadingFollow, setLoadingFollow] = useState<Record<string, boolean>>({});
   
-  const fetchUsers = async (resetUsers = false) => {
+  const fetchUsers = useCallback(async (resetUsers = false) => {
     if (resetUsers) {
       setIsLoading(true);
       setPage(1);
@@ -79,7 +79,7 @@ export function FollowersDialog({
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  };
+  }, [page, type, username]);
   
   const loadMore = () => {
     if (hasMore && !isLoadingMore) {
@@ -119,13 +119,13 @@ export function FollowersDialog({
     if (open) {
       fetchUsers(true);
     }
-  }, [open, type, username]);
+  }, [open, type, username, fetchUsers]);
   
   useEffect(() => {
     if (page > 1) {
       fetchUsers(false);
     }
-  }, [page]);
+  }, [page, fetchUsers]);
   
   useEffect(() => {
     // Reset following state when users change

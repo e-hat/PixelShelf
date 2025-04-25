@@ -84,6 +84,7 @@ export function useAssets(options: UseAssetsOptions = {}) {
   useEffect(() => {
     fetchAssets(true);
   }, [
+    fetchAssets,
     options.userId,
     options.projectId,
     options.type,
