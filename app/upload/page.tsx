@@ -1,7 +1,7 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
@@ -74,7 +74,7 @@ const uploadSchema = uploadInputSchema.transform((data) => ({
 
 type UploadFormValues = z.infer<typeof uploadInputSchema>;
 
-export default function UploadPage() {
+function UploadPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
@@ -84,7 +84,7 @@ export default function UploadPage() {
   const [selectedFileType, setSelectedFileType] = useState<keyof typeof ASSET_TYPES>('IMAGE');
   
   // Get projectId from query params if present
-  const projectIdParam = searchParams?.get('projectId');
+  const projectIdParam = searchParams?.get('projectId') ?? undefined;
 
   // Initialize form with default values
   const form = useForm<UploadFormValues>({
@@ -454,6 +454,14 @@ export default function UploadPage() {
       </Form>
     </div>
   );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={<div>Loading URL parameters...</div>}>
+      <UploadPageContent />
+    </Suspense>
+  )
 }
 
 // Extra icon component

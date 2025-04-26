@@ -83,16 +83,7 @@ export function useAssets(options: UseAssetsOptions = {}) {
   
   useEffect(() => {
     fetchAssets(true);
-  }, [
-    fetchAssets,
-    options.userId,
-    options.projectId,
-    options.type,
-    options.tag,
-    options.search,
-    options.sort,
-    options.limit,
-  ]);
+  }, [options.sort, options.search]);
   
   useEffect(() => {
     if (page > 1) {

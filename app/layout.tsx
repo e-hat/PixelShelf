@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import '../styles/globals.css';
 import Navbar from '@/components/layout/navbar';
@@ -15,6 +15,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'PixelShelf' }],
   creator: 'PixelShelf',
   publisher: 'PixelShelf',
+  metadataBase: new URL('https://pixelshelf.dev'), // Update to real domain for deployment
   openGraph: {
     title: 'PixelShelf - The Game Developer Portfolio Platform',
     description: 'Create, share, and discover game development portfolios with PixelShelf',
@@ -38,11 +39,6 @@ export const metadata: Metadata = {
     images: ['/images/og-image.png'],
     creator: '@pixelshelf',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
   robots: {
     index: true,
     follow: true,
@@ -56,6 +52,13 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+};
+
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

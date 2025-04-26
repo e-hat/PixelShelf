@@ -102,11 +102,12 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
   
   return (
     <div className={cn("space-y-6", className)}>
-      <div className="flex justify-between items-center">
-        <Tabs 
-          defaultValue={activeTab} 
-          onValueChange={handleTabChange}
-        >
+      <Tabs 
+        defaultValue={activeTab} 
+        onValueChange={handleTabChange}
+      >
+        <div className="flex justify-between items-center">
+
           <TabsList>
             <TabsTrigger value="trending" className="flex items-center">
               <TrendingUp className="mr-2 h-4 w-4" />
@@ -121,57 +122,57 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
               Following
             </TabsTrigger>
           </TabsList>
-        </Tabs>
         
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={refreshFeed}
-          disabled={isLoading || isRefreshing}
-        >
-          <RefreshCw className={cn(
-            "h-4 w-4 mr-2",
-            isRefreshing && "animate-spin"
-          )} />
-          Refresh
-        </Button>
-      </div>
-      
-      <TabsContent value="trending" className="space-y-6 mt-6">
-        {isLoading ? (
-          <LoadingState />
-        ) : error ? (
-          <ErrorState error={error} onRetry={reloadTrending} />
-        ) : trendingAssets.length === 0 ? (
-          <EmptyState message="No trending assets found." />
-        ) : (
-          <AssetGrid 
-            assets={trendingAssets} 
-            hasMore={hasMore} 
-            isLoadingMore={isLoadingMore} 
-            onLoadMore={loadMore} 
-          />
-        )}
-      </TabsContent>
-      
-      <TabsContent value="following" className="space-y-6 mt-6">
-        {!session ? (
-          <SignInPrompt />
-        ) : isLoading ? (
-          <LoadingState />
-        ) : error ? (
-          <ErrorState error={error} onRetry={reloadFollowing} />
-        ) : filteredFollowingAssets.length === 0 ? (
-          <EmptyFollowingState />
-        ) : (
-          <AssetGrid 
-            assets={filteredFollowingAssets} 
-            hasMore={hasMore} 
-            isLoadingMore={isLoadingMore} 
-            onLoadMore={loadMore} 
-          />
-        )}
-      </TabsContent>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={refreshFeed}
+            disabled={isLoading || isRefreshing}
+          >
+            <RefreshCw className={cn(
+              "h-4 w-4 mr-2",
+              isRefreshing && "animate-spin"
+            )} />
+            Refresh
+          </Button>
+        </div>
+        
+        <TabsContent value="trending" className="space-y-6 mt-6">
+          {isLoading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState error={error} onRetry={reloadTrending} />
+          ) : trendingAssets.length === 0 ? (
+            <EmptyState message="No trending assets found." />
+          ) : (
+            <AssetGrid 
+              assets={trendingAssets} 
+              hasMore={hasMore} 
+              isLoadingMore={isLoadingMore} 
+              onLoadMore={loadMore} 
+            />
+          )}
+        </TabsContent>
+        
+        <TabsContent value="following" className="space-y-6 mt-6">
+          {!session ? (
+            <SignInPrompt />
+          ) : isLoading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState error={error} onRetry={reloadFollowing} />
+          ) : filteredFollowingAssets.length === 0 ? (
+            <EmptyFollowingState />
+          ) : (
+            <AssetGrid 
+              assets={filteredFollowingAssets} 
+              hasMore={hasMore} 
+              isLoadingMore={isLoadingMore} 
+              onLoadMore={loadMore} 
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
