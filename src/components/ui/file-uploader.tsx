@@ -253,6 +253,9 @@ export function FileUploader({
             alt="Uploaded file"
             fill
             className="object-cover"
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
           {showRemoveButton && (
             <div className="absolute top-2 right-2 flex space-x-2">

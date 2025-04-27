@@ -76,10 +76,10 @@ export default function AssetDetailPage() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [comments, setComments] = useState(asset.comments);
 
-  // Now if you want to fetch the real asset at `api.assets.getById(id)`:
+  // to fetch the real asset at `api.assets.getById(id)`:
   useEffect(() => {
     if (!id) return;
-    // fetch from your API instead of the mock…
+    // fetch from API instead of the mock…
     // api.assets.getById(id).then(setAsset)…
   }, [id]);
 
@@ -143,6 +143,9 @@ export default function AssetDetailPage() {
               width={1200}
               height={800}
               className="object-contain w-full"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           </div>
         );
@@ -259,7 +262,15 @@ export default function AssetDetailPage() {
                       <Link href={`/u/${c.user.username}`}>
                         <div className="relative h-10 w-10 rounded-full overflow-hidden bg-muted">
                           {c.user.image
-                            ? <Image src={c.user.image} alt={c.user.name} fill className="object-cover" />
+                            ? <Image
+                                src={c.user.image}
+                                alt={c.user.name}
+                                fill
+                                className="object-cover"
+                                placeholder="blur"
+                                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              />
                             : <User className="h-10 w-10 p-2 text-muted-foreground" />}
                         </div>
                       </Link>
@@ -290,7 +301,15 @@ export default function AssetDetailPage() {
               <Link href={`/u/${asset.user.username}`}>
                 <div className="relative h-12 w-12 rounded-full overflow-hidden bg-muted">
                   {asset.user.image
-                    ? <Image src={asset.user.image} alt={asset.user.name} fill className="object-cover" />
+                    ? <Image
+                        src={asset.user.image}
+                        alt={asset.user.name}
+                        fill
+                        className="object-cover"
+                        placeholder="blur"
+                        blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
                     : <User className="h-12 w-12 p-2 text-muted-foreground" />}
                 </div>
               </Link>

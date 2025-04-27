@@ -236,7 +236,10 @@ export default function NewProjectPage() {
                     src={thumbnailPreview} 
                     alt="Thumbnail preview" 
                     fill 
-                    className="object-cover" 
+                    className="object-cover"
+                    placeholder="blur"
+                    blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                   />
                   <button 
                     type="button"

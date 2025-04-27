@@ -212,6 +212,9 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
                 alt={project.title}
                 fill
                 className="object-cover"
+                placeholder="blur"
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-pixelshelf-light to-pixelshelf-accent flex items-center justify-center">
@@ -233,6 +236,9 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
                       alt={project.user.name}
                       fill
                       className="object-cover"
+                      placeholder="blur"
+                      blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   ) : (
                     <User className="h-12 w-12 p-2 text-muted-foreground" />

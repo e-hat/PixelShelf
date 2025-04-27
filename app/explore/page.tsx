@@ -607,7 +607,10 @@ export default function ExplorePage() {
                                 src={creator.image} 
                                 alt={creator.name} 
                                 fill 
-                                className="object-cover" 
+                                className="object-cover"
+                                placeholder="blur"
+                                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                               />
                             ) : (
                               <User className="h-24 w-24 p-6 text-muted-foreground" />
@@ -629,7 +632,10 @@ export default function ExplorePage() {
                                 src={creator.image} 
                                 alt={creator.name} 
                                 fill 
-                                className="object-cover" 
+                                className="object-cover"
+                                placeholder="blur"
+                                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               />
                             ) : (
                               <User className="h-16 w-16 p-4 text-muted-foreground" />

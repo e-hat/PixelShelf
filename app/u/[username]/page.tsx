@@ -183,6 +183,11 @@ export default function UserProfilePage({ params }: { params: Params }) {
             fill
             className="object-cover"
             priority
+            {...(user.bannerImage.startsWith('data:') ? {
+              placeholder: "blur",
+              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+            } : {})}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         )}
         {isOwnProfile && (
@@ -207,6 +212,9 @@ export default function UserProfilePage({ params }: { params: Params }) {
                   alt={user.name}
                   fill
                   className="object-cover"
+                  placeholder="blur"
+                  blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
               ) : (
                 <User className="h-full w-full p-10 text-muted-foreground" />

@@ -232,6 +232,9 @@ export function UserPortfolio({ username, isPremium = false }: UserPortfolioProp
             fill
             className="object-cover"
             priority
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         )}
         <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]"></div>
@@ -623,6 +626,9 @@ function FeatureProjectCard({ project, username }: { project: Project; username:
             alt={project.title}
             fill
             className="object-cover"
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-pixelshelf-light to-pixelshelf-primary flex items-center justify-center">
@@ -662,6 +668,9 @@ function ProjectCard({ project, username }: { project: Project; username: string
               alt={project.title}
               fill
               className="object-cover"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-pixelshelf-light to-pixelshelf-primary flex items-center justify-center">

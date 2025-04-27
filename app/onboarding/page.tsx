@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -65,12 +65,21 @@ export default function OnboardingPage() {
     formState: { errors },
   } = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
+    mode: 'onChange',
+    defaultValues: {
+      username: session?.user?.username || '',
+      bio: '',
+      website: '',
+      role: '',
+    }
   });
 
   // Pre-fill the form with user data if available
-  if (session?.user?.name && !profileImagePreview && session.user.image) {
-    setProfileImagePreview(session.user.image);
-  }
+  useEffect(() => {
+    if (session?.user?.name && !profileImagePreview && session.user.image) {
+      setProfileImagePreview(session.user.image);
+    }
+  }, [session, profileImagePreview]);
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -105,14 +114,21 @@ export default function OnboardingPage() {
 
   const onSubmit = async (data: OnboardingFormValues) => {
     setIsSubmitting(true);
-
-    // In a real app, this would update the user profile in the database
-    // For the MVP, we'll simulate a successful update after a short delay
+  
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // In a real app, we would also update the session
+      await fetch('/api/users/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: data.username,
+          bio: data.bio || '',
+          // role: selectedRole || data.role, // TODO: Implement roles...
+        }),
+      });
+  
+      // Update the session
       if (update) {
         await update({
           ...session,
@@ -123,7 +139,7 @@ export default function OnboardingPage() {
           },
         });
       }
-
+  
       toast.success('Profile set up successfully!');
       
       // Redirect to the home page
@@ -187,7 +203,10 @@ export default function OnboardingPage() {
                       src={profileImagePreview} 
                       alt="Profile preview" 
                       fill 
-                      className="object-cover" 
+                      className="object-cover"
+                      placeholder="blur"
+                      blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
@@ -254,7 +273,6 @@ export default function OnboardingPage() {
                       {...register('username')} 
                       className="rounded-l-none"
                       placeholder="your_username"
-                      defaultValue={session.user.username || ''}
                     />
                   </div>
                   {errors.username && (
@@ -304,6 +322,7 @@ export default function OnboardingPage() {
                   type="button" 
                   onClick={() => setStage(3)} 
                   variant="pixel"
+                  disabled={!!errors.username || !!errors.bio}
                 >
                   Continue
                   <ChevronRight className="ml-2 h-4 w-4" />

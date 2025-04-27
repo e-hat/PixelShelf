@@ -43,23 +43,24 @@ model Session {
 }
 
 model User {
-  id                String         @id @default(cuid())
-  name              String?
-  username          String?        @unique
-  email             String?        @unique
-  emailVerified     DateTime?
-  image             String?
-  bio               String?        @db.Text
-  bannerImage       String?
-  location          String?
-  role              UserRole       @default(USER)
-  subscriptionTier  SubscriptionTier @default(FREE)
-  subscriptionId    String?
-  subscriptionStart DateTime?
-  subscriptionEnd   DateTime?
-  social            Json?          // Stores social media links as JSON
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                  String            @id @default(cuid())
+  name                String?
+  username            String?           @unique
+  email               String?           @unique
+  emailVerified       DateTime?
+  password            String?
+  image               String?
+  bio                 String?           @db.Text
+  bannerImage         String?
+  location            String?
+  role                UserRole          @default(USER)
+  subscriptionTier    SubscriptionTier  @default(FREE)
+  subscriptionId      String?
+  subscriptionStart   DateTime?
+  subscriptionEnd     DateTime?
+  social              Json?             // Stores social media links as JSON
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   accounts    Account[]
   sessions    Session[]

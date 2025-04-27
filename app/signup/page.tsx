@@ -5,7 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 
@@ -44,6 +44,7 @@ export default function SignupPage() {
     register,
     handleSubmit,
     formState: { errors },
+    control
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -54,30 +55,43 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     setIsLoading(true);
     
-    // In a real app, this would create a new user in the database
-    // For the MVP, we'll simulate a successful registration after a short delay
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Create the user
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          password: data.password,
+        }),
+      });
       
-      // After registration, sign in the user
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create account');
+      }
+      
+      // Sign in the user
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
         redirect: false,
       });
-
+  
       if (result?.error) {
         toast.error('An error occurred during sign in. Please try again.');
         return;
       }
-
+  
       // Redirect to onboarding
       router.push('/onboarding');
       toast.success('Account created successfully!');
     } catch (error) {
       console.error('Signup error:', error);
-      toast.error('Failed to create account. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -181,7 +195,17 @@ export default function SignupPage() {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Checkbox id="terms" {...register('terms')} />
+              <Controller
+                control={control}
+                name="terms"
+                render={({ field }) => (
+                  <Checkbox
+                    id="terms"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
                 <label htmlFor="terms" className="text-sm leading-none">
                   I agree to the{' '}
                   <Link href="/terms" className="text-pixelshelf-primary hover:underline">

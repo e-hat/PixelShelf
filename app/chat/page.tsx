@@ -303,7 +303,10 @@ export default function ChatPage() {
                               src={chat.participants[0].image} 
                               alt={chat.participants[0].name} 
                               fill 
-                              className="object-cover" 
+                              className="object-cover"
+                              placeholder="blur"
+                              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             />
                           ) : (
                             <User className="h-full w-full p-2 text-muted-foreground" />
@@ -360,7 +363,10 @@ export default function ChatPage() {
                           alt={chats.find(c => c.id === selectedChat)?.participants[0].name || ''} 
                           width={40}
                           height={40}
-                          className="object-cover" 
+                          className="object-cover"
+                          placeholder="blur"
+                          blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                         />
                       ) : (
                         <User className="h-full w-full p-2 text-muted-foreground" />

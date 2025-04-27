@@ -8,6 +8,9 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { getRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Asset } from '@/types';
+import { useSession } from 'next-auth/react';
+import { api } from '@/lib/api/api-client';
+import { toast } from 'sonner';
 
 interface AssetCardProps {
   asset: Asset;
@@ -16,16 +19,37 @@ interface AssetCardProps {
 
 
 export default function AssetCard({ asset }: AssetCardProps) {
+  const { data: session } = useSession();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(asset.likes ?? 0);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleLike = () => {
-    if (liked) {
-      setLikeCount(likeCount - 1);
-    } else {
-      setLikeCount(likeCount + 1);
+  const handleLike = async () => {
+    if (!session) {
+      toast.error('Please sign in to like this asset');
+      return;
     }
-    setLiked(!liked);
+    
+    setIsUpdating(true);
+    
+    try {
+      if (liked) {
+        // Unlike the asset
+        await api.likes.unlikeAsset(asset.id);
+        setLikeCount(prev => prev - 1);
+        setLiked(false);
+      } else {
+        // Like the asset
+        await api.likes.likeAsset(asset.id);
+        setLikeCount(prev => prev + 1);
+        setLiked(true);
+      }
+    } catch (error) {
+      console.error('Error updating like:', error);
+      toast.error('Failed to update like');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   // Determine what to render based on the asset type
@@ -39,6 +63,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
               alt={asset.title}
               fill
               className="object-cover transition-transform hover:scale-105"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           </div>
         );
@@ -50,6 +77,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
               alt={asset.title}
               fill
               className="object-cover transition-transform hover:scale-105"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
               <Box className="h-12 w-12 text-white" />
@@ -83,6 +113,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
               alt={asset.title}
               fill
               className="object-cover transition-transform hover:scale-105"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           </div>
         );
@@ -114,6 +147,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
                 alt={asset.user.name ?? "User"}
                 fill
                 className="object-cover"
+                placeholder="blur"
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             ) : (
               <div className="bg-gray-300 w-full h-full" />

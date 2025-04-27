@@ -407,14 +407,24 @@ export default function ProfileSettingsPage() {
                             src={profileImagePreview} 
                             alt="Profile preview" 
                             fill 
-                            className="object-cover" 
+                            className="object-cover"
+                            {...(user.bannerImage.startsWith('data:') ? {
+                              placeholder: "blur",
+                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            } : {})}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                           />
                         ) : user.image ? (
                           <Image 
                             src={user.image} 
                             alt={user.name} 
                             fill 
-                            className="object-cover" 
+                            className="object-cover"
+                            {...(user.bannerImage.startsWith('data:') ? {
+                              placeholder: "blur",
+                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            } : {})}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           />
                         ) : (
                           <User className="h-full w-full p-4 text-muted-foreground" />
@@ -468,14 +478,20 @@ export default function ProfileSettingsPage() {
                             src={bannerImagePreview} 
                             alt="Banner preview" 
                             fill 
-                            className="object-cover" 
+                            className="object-cover"
+                            placeholder="blur"
+                            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                           />
                         ) : user.bannerImage ? (
                           <Image 
                             src={user.bannerImage} 
                             alt="Banner" 
                             fill 
-                            className="object-cover" 
+                            className="object-cover"
+                            placeholder="blur"
+                            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           />
                         ) : (
                           <div className="h-full w-full flex items-center justify-center">

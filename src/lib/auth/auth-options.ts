@@ -1,6 +1,7 @@
 import type { NextAuthOptions, Session, User } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import type { User as PrismaUser } from '@prisma/client';
 import type { User as AppUser } from '@/types';
 import prisma from "@/lib/db/prisma";
 import GoogleProvider from "next-auth/providers/google";
@@ -104,7 +105,9 @@ export const authOptions: NextAuthOptions = {
       }
 
       if (user) {
-        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+        });
 
         if (dbUser) {
           token.id = dbUser.id;
