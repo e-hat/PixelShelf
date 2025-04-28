@@ -379,7 +379,9 @@ function UploadPageContent() {
                     <FormLabel>Project (Optional)</FormLabel>
                     <Select
                       value={field.value}
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => {
+                        field.onChange(value === 'none' ? undefined : value);
+                      }}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -387,7 +389,7 @@ function UploadPageContent() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Not part of a project</SelectItem>
+                        <SelectItem value="none">Not part of a project</SelectItem>
                         {projects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.title}

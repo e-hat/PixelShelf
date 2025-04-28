@@ -23,7 +23,9 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
     signOut: "/",
     error: "/login",
-    newUser: "/onboarding",
+    // We'll handle the newUser redirect in a middleware to avoid redirecting
+    // users who have already completed onboarding
+    // newUser: "/onboarding",
   },
   providers: [
     GoogleProvider({
@@ -98,17 +100,21 @@ export const authOptions: NextAuthOptions = {
       trigger?: string;
       session?: Session;
     }) {
+      // When update is triggered from the client and session data is provided
       if (trigger === "update" && session) {
+        // Make sure we update all relevant user fields
         if (session.user?.name) token.name = session.user.name;
         if (session.user?.image) token.picture = session.user.image;
+        if (session.user?.username) token.username = session.user.username;
         return token;
       }
-
+  
+      // When a user signs in, fetch their full data from the database
       if (user) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
         });
-
+  
         if (dbUser) {
           token.id = dbUser.id;
           token.name = dbUser.name || "";
@@ -118,7 +124,7 @@ export const authOptions: NextAuthOptions = {
           token.subscriptionTier = dbUser.subscriptionTier;
         }
       }
-
+  
       return token;
     },
   },

@@ -114,9 +114,10 @@ export default function OnboardingPage() {
 
   const onSubmit = async (data: OnboardingFormValues) => {
     setIsSubmitting(true);
-  
+    
     try {
-      await fetch('/api/users/profile', {
+      // First update the user profile on the server
+      const response = await fetch('/api/users/profile', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -127,8 +128,13 @@ export default function OnboardingPage() {
           // role: selectedRole || data.role, // TODO: Implement roles...
         }),
       });
-  
-      // Update the session
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update profile');
+      }
+      
+      // Update the session with the new username
       if (update) {
         await update({
           ...session,
@@ -140,13 +146,19 @@ export default function OnboardingPage() {
         });
       }
   
+      // Upload profile image if selected (would be in a real app)
+      // if (profileImage) {
+      //   // Upload image logic would go here
+      // }
+      
       toast.success('Profile set up successfully!');
       
       // Redirect to the home page
       router.push('/');
+      router.refresh(); // Make sure the page fully refreshes to apply session changes
     } catch (error) {
       console.error('Onboarding error:', error);
-      toast.error('Failed to set up profile. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to set up profile. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

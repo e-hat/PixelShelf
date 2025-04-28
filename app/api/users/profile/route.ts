@@ -34,11 +34,32 @@ export async function PATCH(req: NextRequest) {
       );
     }
     
+    // Check if username is already taken by another user
+    if (validated.data.username) {
+      const existingUser = await prisma.user.findFirst({
+        where: { 
+          username: validated.data.username,
+          NOT: { 
+            id: session.user.id 
+          }
+        },
+      });
+      
+      if (existingUser) {
+        return NextResponse.json(
+          { error: 'Username is already taken' },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Update the user profile
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         username: validated.data.username,
         bio: validated.data.bio || undefined,
+        location: validated.data.location || undefined,
         // role: validated.data.role || undefined, // TODO: Implement role...
       },
     });
