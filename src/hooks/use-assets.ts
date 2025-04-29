@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, ApiError } from '@/lib/api/api-client';
 import { Asset } from '@/types';
 import { toast } from 'sonner';
@@ -17,16 +17,33 @@ interface UseAssetsOptions {
   limit?: number;
 }
 
-export function useAssets(options: UseAssetsOptions = {}) {
+export function useAssets(options: UseAssetsOptions | null = {}) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(options.initialPage || 1);
+  const [page, setPage] = useState(options?.initialPage || 1);
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
+  // Use refs to track previous options and prevent unnecessary refetches
+  const prevOptionsRef = useRef<string | null>(null);
+  
   const fetchAssets = useCallback(async (reset = false) => {
+    // If options is null, don't fetch anything
+    if (!options) {
+      setIsLoading(false);
+      setAssets([]);
+      return;
+    }
+    
+    // If userId is missing and it's required, don't fetch
+    if (!options.userId && !options.projectId && !options.search && !options.tag) {
+      setIsLoading(false);
+      setAssets([]);
+      return;
+    }
+    
     try {
       const currentPage = reset ? 1 : page;
       
@@ -63,7 +80,6 @@ export function useAssets(options: UseAssetsOptions = {}) {
     } catch (err) {
       console.error('Error fetching assets:', err);
       setError(err instanceof ApiError ? err.message : 'Failed to load assets');
-      toast.error('Failed to load assets');
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -82,14 +98,22 @@ export function useAssets(options: UseAssetsOptions = {}) {
   }, [fetchAssets]);
   
   useEffect(() => {
-    fetchAssets(true);
-  }, [options.sort, options.search]);
+    // Convert options to string for comparison
+    const optionsString = options ? JSON.stringify(options) : null;
+    
+    // Only fetch if options have changed
+    if (optionsString !== prevOptionsRef.current) {
+      setPage(1);
+      fetchAssets(true);
+      prevOptionsRef.current = optionsString;
+    }
+  }, [fetchAssets, options]);
   
   useEffect(() => {
-    if (page > 1) {
+    if (page > 1 && options) {
       fetchAssets(false);
     }
-  }, [page, fetchAssets]);
+  }, [page, fetchAssets, options]);
   
   return {
     assets,

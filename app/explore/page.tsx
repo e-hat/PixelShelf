@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -272,13 +272,101 @@ const POPULAR_TAGS = [
 export default function ExplorePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('assets');
+  const [activeTab, setActiveTab] = useState<"assets" | "creators">("assets");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [filteredAssets, setFilteredAssets] = useState(MOCK_ASSETS);
   const [filteredCreators, setFilteredCreators] = useState(MOCK_CREATORS);
+  
+  // Create a memoized filter function to prevent unnecessary re-renders
+  const applyFilters = useCallback((query: string, tags: string[], type: string | null, tab?: 'assets' | 'creators') => {
+    if (tab === 'assets') {
+      let assets = MOCK_ASSETS;
+  
+      if (query) {
+        const lowerQuery = query.toLowerCase();
+        assets = assets.filter(asset => 
+          asset.title.toLowerCase().includes(lowerQuery) || 
+          asset.description?.toLowerCase().includes(lowerQuery) ||
+          asset.user.name?.toLowerCase().includes(lowerQuery)
+        );
+      }
+  
+      if (tags.length > 0) {
+        assets = assets.filter(asset => 
+          asset.tags.some(tag => tags.includes(tag))
+        );
+      }
+  
+      if (type) {
+        assets = assets.filter(asset => asset.fileType === type);
+      }
+  
+      setFilteredAssets(assets);
+    } else if (tab === 'creators') {
+      let creators = MOCK_CREATORS;
+  
+      if (query) {
+        const lowerQuery = query.toLowerCase();
+        creators = creators.filter(creator => 
+          creator.name.toLowerCase().includes(lowerQuery) || 
+          creator.username.toLowerCase().includes(lowerQuery) || 
+          creator.bio.toLowerCase().includes(lowerQuery)
+        );
+      }
+  
+      if (tags.length > 0) {
+        creators = creators.filter(creator => 
+          creator.tags.some(tag => tags.includes(tag))
+        );
+      }
+  
+      setFilteredCreators(creators);
+    }
+  }, []);  
+
+  // Helper function to toggle tag selection
+  const toggleTag = (tag: string) => {
+    const newTags = selectedTags.includes(tag)
+      ? selectedTags.filter(t => t !== tag)
+      : [...selectedTags, tag];
+    
+    setSelectedTags(newTags);
+  };
+  
+  // Helper function to clear filters
+  const clearFilters = () => {
+    setSelectedTags([]);
+    setSelectedType(null);
+    setSearchQuery('');
+  
+    // Keep current tab in the URL
+    const params = new URLSearchParams();
+    params.set('tab', activeTab);
+    router.push(`/explore?${params.toString()}`);
+  
+    setFilteredAssets(MOCK_ASSETS);
+    setFilteredCreators(MOCK_CREATORS);
+  };
+  
+  // Handle form submission
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Update URL with search params
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('q', searchQuery);
+    if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
+    if (selectedType) params.set('type', selectedType);
+    params.set('tab', activeTab);
+    
+    router.push(`/explore?${params.toString()}`);
+    
+    // Note: We don't need to call applyFilters here as it will be triggered
+    // by the ExploreSearchParams component when the URL changes
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -297,116 +385,13 @@ export default function ExplorePage() {
             setSelectedTags={setSelectedTags}
             setSelectedType={setSelectedType}
             setActiveTab={setActiveTab}
-            applyFilters={(query, tags, type) => {
-              // Filter assets
-              let assets = MOCK_ASSETS;
-              
-              if (query) {
-                const lowerQuery = query.toLowerCase();
-                assets = assets.filter(asset => 
-                  asset.title.toLowerCase().includes(lowerQuery) || 
-                  asset.description?.toLowerCase().includes(lowerQuery) ||
-                  asset.user.name?.toLowerCase().includes(lowerQuery)
-                );
-              }
-              
-              if (tags.length > 0) {
-                assets = assets.filter(asset => 
-                  asset.tags.some(tag => tags.includes(tag))
-                );
-              }
-              
-              if (type) {
-                assets = assets.filter(asset => asset.fileType === type);
-              }
-              
-              setFilteredAssets(assets);
-              
-              // Filter creators
-              let creators = MOCK_CREATORS;
-              
-              if (query) {
-                const lowerQuery = query.toLowerCase();
-                creators = creators.filter(creator => 
-                  creator.name.toLowerCase().includes(lowerQuery) || 
-                  creator.username.toLowerCase().includes(lowerQuery) || 
-                  creator.bio.toLowerCase().includes(lowerQuery)
-                );
-              }
-              
-              if (tags.length > 0) {
-                creators = creators.filter(creator => 
-                  creator.tags.some(tag => tags.includes(tag))
-                );
-              }
-              
-              setFilteredCreators(creators);
-            }}
+            applyFilters={applyFilters}
           />
         </Suspense>
         
         {/* Search and filters */}
         <div className="space-y-4">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            
-            // Update URL with search params
-            const params = new URLSearchParams();
-            if (searchQuery) params.set('q', searchQuery);
-            if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
-            if (selectedType) params.set('type', selectedType);
-            params.set('tab', activeTab);
-            
-            router.push(`/explore?${params.toString()}`);
-            
-            // Apply filters
-            const tags = selectedTags;
-            const type = selectedType;
-            
-            // Filter assets
-            let assets = MOCK_ASSETS;
-            
-            if (searchQuery) {
-              const lowerQuery = searchQuery.toLowerCase();
-              assets = assets.filter(asset => 
-                asset.title.toLowerCase().includes(lowerQuery) || 
-                asset.description?.toLowerCase().includes(lowerQuery) ||
-                asset.user.name?.toLowerCase().includes(lowerQuery)
-              );
-            }
-            
-            if (tags.length > 0) {
-              assets = assets.filter(asset => 
-                asset.tags.some(tag => tags.includes(tag))
-              );
-            }
-            
-            if (type) {
-              assets = assets.filter(asset => asset.fileType === type);
-            }
-            
-            setFilteredAssets(assets);
-            
-            // Filter creators
-            let creators = MOCK_CREATORS;
-            
-            if (searchQuery) {
-              const lowerQuery = searchQuery.toLowerCase();
-              creators = creators.filter(creator => 
-                creator.name.toLowerCase().includes(lowerQuery) || 
-                creator.username.toLowerCase().includes(lowerQuery) || 
-                creator.bio.toLowerCase().includes(lowerQuery)
-              );
-            }
-            
-            if (tags.length > 0) {
-              creators = creators.filter(creator => 
-                creator.tags.some(tag => tags.includes(tag))
-              );
-            }
-            
-            setFilteredCreators(creators);
-          }} className="flex items-center space-x-2">
+          <form onSubmit={handleSearch} className="flex items-center space-x-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -524,7 +509,7 @@ export default function ExplorePage() {
           <Tabs 
             defaultValue={activeTab} 
             onValueChange={(value: string) => {
-              setActiveTab(value);
+              setActiveTab(value as "assets" | "creators");
               
               // Update URL
               const params = new URLSearchParams();
@@ -673,27 +658,4 @@ export default function ExplorePage() {
       </div>
     </div>
   );
-  
-  // Helper function to toggle tag selection
-  function toggleTag(tag: string) {
-    const newTags = selectedTags.includes(tag)
-      ? selectedTags.filter(t => t !== tag)
-      : [...selectedTags, tag];
-    
-    setSelectedTags(newTags);
-  }
-  
-  // Helper function to clear filters
-  function clearFilters() {
-    setSelectedTags([]);
-    setSelectedType(null);
-    setSearchQuery('');
-    
-    // Update URL
-    router.push('/explore');
-    
-    // Reset to all assets/creators
-    setFilteredAssets(MOCK_ASSETS);
-    setFilteredCreators(MOCK_CREATORS);
-  }
 }

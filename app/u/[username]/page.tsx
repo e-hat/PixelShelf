@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { 
-  User, 
+  User as UserIcon, 
   MapPin, 
   Twitter, 
   Github, 
@@ -16,7 +16,8 @@ import {
   FolderKanban, 
   ChevronDown,
   Users,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,166 +25,120 @@ import AssetCard from '@/components/feature-specific/asset-card';
 import ProjectCard from '@/components/feature-specific/project-card';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Asset } from '@/types';
-
-interface PageProps {
-  params: {
-    username: string;
-  };
-}
-
-// Mock data for the MVP
-const MOCK_USER = {
-  id: '1',
-  username: 'pixelartist',
-  name: 'Alex Johnson',
-  bio: 'Indie game developer and pixel artist. Creating retro-style games with modern gameplay. Currently working on my forest platformer "Woodland Warriors".',
-  image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-  bannerImage: 'https://images.unsplash.com/photo-1616031037011-287c29dd8ea2',
-  location: 'San Francisco, CA',
-  social: {
-    twitter: 'pixelartist',
-    github: 'pixeldev',
-    website: 'pixelartist.dev',
-    linkedin: 'alexjohnson',
-  },
-  followers: 342,
-  following: 125,
-  subscriptionTier: 'PREMIUM',
-  createdAt: new Date('2023-01-15'),
-  isPremium: true,
-};
-
-const MOCK_ASSETS: Asset[] = [
-  {
-    id: '1',
-    title: 'Forest Tileset',
-    description: 'A complete tileset for forest environments with 64x64 pixel art tiles.',
-    fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
-    fileType: 'IMAGE',
-    projectId: null,
-    userId: '1',
-    isPublic: true,
-    tags: ['forest', 'tileset', 'pixel art'],
-    createdAt: new Date('2023-10-15'),
-    updatedAt: new Date('2023-10-16'),
-    user: {
-      id: '1',
-      name: 'Alex Johnson',
-      username: 'pixelartist',
-      image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-    },
-    likes: 156,
-    comments: 24,
-    likedByUser: false,
-  },
-  {
-    id: '2',
-    title: 'Character Sprite Sheet',
-    description: 'Main hero character with walking, running, and attack animations.',
-    fileUrl: 'https://images.unsplash.com/photo-1633467067804-c08b17fd2a8a',
-    fileType: 'IMAGE',
-    projectId: null,
-    userId: '1',
-    isPublic: true,
-    tags: ['character', 'spritesheet', 'pixel art'],
-    createdAt: new Date('2023-10-12'),
-    updatedAt: new Date('2023-10-13'),
-    user: {
-      id: '1',
-      name: 'Alex Johnson',
-      username: 'pixelartist',
-      image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-    },
-    likes: 243,
-    comments: 43,
-    likedByUser: false,
-  },
-  {
-    id: '3',
-    title: '8-Bit UI Elements',
-    description: 'Comprehensive UI kit with buttons, panels, and icons in retro 8-bit style.',
-    fileUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9',
-    fileType: 'IMAGE',
-    projectId: null,
-    userId: '1',
-    isPublic: true,
-    tags: ['ui', '8-bit', 'interface'],
-    createdAt: new Date('2023-10-20'),
-    updatedAt: new Date('2023-10-21'),
-    user: {
-      id: '1',
-      name: 'Alex Johnson',
-      username: 'pixelartist',
-      image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-    },
-    likes: 89,
-    comments: 12,
-    likedByUser: false,
-  },
-];
-
-const MOCK_PROJECTS = [
-  {
-    id: '1',
-    title: 'Woodland Warriors',
-    description: 'A 2D action platformer set in a mystical forest world with hand-crafted pixel art.',
-    thumbnail: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1',
-    assetCount: 28,
-    createdAt: new Date('2023-05-12'),
-  },
-  {
-    id: '2',
-    title: 'Cosmic Drifter',
-    description: 'Space exploration game with procedurally generated galaxies and retro-futuristic aesthetics.',
-    thumbnail: 'https://images.unsplash.com/photo-1581822261290-991b38693d1b',
-    assetCount: 15,
-    createdAt: new Date('2023-08-22'),
-  },
-];
+import { useUserProfile } from '@/hooks/use-user-profile';
+import { useAssets } from '@/hooks/use-assets';
+import { useProjects } from '@/hooks/use-projects';
 
 type Params = Promise<{ username: string }>;
 
 export default function UserProfilePage({ params }: { params: Params }) {
-  // unwrap the promised params
+  // Unwrap the promised params
   const { username } = use(params);
-
+  
   const { data: session } = useSession();
-  const [user, setUser] = useState(MOCK_USER);
   const [activeTab, setActiveTab] = useState<"assets" | "projects">("assets");
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followerCount, setFollowerCount] = useState(user.followers);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Use the existing hooks to fetch user data, assets, and projects
+  const { 
+    profile, 
+    isLoading: isLoadingProfile, 
+    error: profileError, 
+    isFollowing, 
+    followerCount, 
+    followUser, 
+    unfollowUser 
+  } = useUserProfile(username);
+  
+  // Only fetch assets when profile is loaded to prevent dependency loops
+  const { 
+    assets, 
+    isLoading: isLoadingAssets, 
+    error: assetsError 
+  } = useAssets(profile ? { 
+    userId: profile.id, 
+    limit: 12 
+  } : null);
+  
+  // Only fetch projects when profile is loaded to prevent dependency loops
+  const { 
+    projects, 
+    isLoading: isLoadingProjects,
+    error: projectsError 
+  } = useProjects(profile ? { 
+    username: username, 
+    limit: 6 
+  } : null);
 
-  const isOwnProfile =
-    session?.user?.name?.toLowerCase() === username.toLowerCase();
+  const isOwnProfile = session?.user?.username?.toLowerCase() === username.toLowerCase();
 
-  const handleFollow = () => {
-    if (isFollowing) {
-      setFollowerCount((c) => c - 1);
-      toast.success(`Unfollowed ${user.name}`);
-    } else {
-      setFollowerCount((c) => c + 1);
-      toast.success(`Following ${user.name}`);
+  const handleFollow = async () => {
+    if (!session) {
+      toast.error('Please sign in to follow users');
+      return;
     }
-    setIsFollowing((f) => !f);
+    
+    try {
+      if (isFollowing) {
+        await unfollowUser();
+      } else {
+        await followUser();
+      }
+    } catch (error) {
+      toast.error('Failed to process your request');
+    }
   };
 
   const handleMessage = () => {
-    toast.success(`Started a chat with ${user.name}`);
+    if (!session) {
+      toast.error('Please sign in to message users');
+      return;
+    }
+    
+    if (!profile) return;
+    
+    toast.success(`Started a chat with ${profile.name}`);
+    // In a real implementation, you would:
+    // 1. Create a chat if it doesn't exist
+    // 2. Navigate to the chat page
   };
+
+  // Loading state
+  if (isLoadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (profileError || !profile) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <h1 className="text-2xl font-bold mb-4">User not found</h1>
+        <p className="text-muted-foreground mb-8">
+          {profileError || "The user you're looking for doesn't exist or couldn't be loaded."}
+        </p>
+        <Button asChild variant="outline">
+          <Link href="/">Return Home</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
       {/* Banner */}
       <div className="relative h-64 md:h-80 w-full bg-gradient-to-br from-pixelshelf-light to-pixelshelf-primary overflow-hidden">
-        {user.bannerImage && (
+        {profile.bannerImage && (
           <Image
-            src={user.bannerImage}
-            alt={`${user.name}'s banner`}
+            src={profile.bannerImage}
+            alt={`${profile.name}'s banner`}
             fill
             className="object-cover"
             priority
-            {...(user.bannerImage.startsWith('data:') ? {
+            {...(profile.bannerImage.startsWith('data:') ? {
               placeholder: "blur",
               blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
             } : {})}
@@ -200,16 +155,16 @@ export default function UserProfilePage({ params }: { params: Params }) {
         )}
       </div>
 
-      {/* Profile info */}
-      <div className="container px-4 md:px-6 relative">
-        <div className="flex flex-col md:flex-row -mt-24 md:-mt-16 mb-8">
-          {/* Avatar */}
-          <div className="relative mb-4 md:mb-0 md:mr-6">
+      {/* Profile info - keeping the exact styling as specified */}
+      <div className="container px-4 md:px-6">
+        <div className="flex flex-col md:flex-row mb-8">
+          {/* Avatar - keeping the exact styling as specified */}
+          <div className="relative mb-4 md:mb-0 md:mr-6 -mt-24 md:-mt-16">
             <div className="rounded-full overflow-hidden border-4 border-background h-32 w-32 md:h-48 md:w-48 bg-background relative">
-              {user.image ? (
+              {profile.image ? (
                 <Image
-                  src={user.image}
-                  alt={user.name}
+                  src={profile.image}
+                  alt={profile.name || 'User avatar'}
                   fill
                   className="object-cover"
                   placeholder="blur"
@@ -217,10 +172,10 @@ export default function UserProfilePage({ params }: { params: Params }) {
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
               ) : (
-                <User className="h-full w-full p-10 text-muted-foreground" />
+                <UserIcon className="h-full w-full p-10 text-muted-foreground" />
               )}
             </div>
-            {user.isPremium && (
+            {profile.subscriptionTier === 'PREMIUM' && (
               <div className="absolute bottom-2 right-2 bg-pixelshelf-primary text-white text-xs font-bold px-2 py-1 rounded-full">
                 PRO
               </div>
@@ -231,14 +186,14 @@ export default function UserProfilePage({ params }: { params: Params }) {
           <div className="flex-1 pt-0 md:pt-8">
             <div className="flex flex-col md:flex-row justify-between items-start mb-4">
               <div>
-                <h1 className="text-3xl font-bold">{user.name}</h1>
+                <h1 className="text-3xl font-bold">{profile.name}</h1>
                 <div className="flex items-center text-muted-foreground mb-2">
-                  <span className="text-sm">@{user.username}</span>
-                  {user.location && (
+                  <span className="text-sm">@{profile.username}</span>
+                  {profile.location && (
                     <>
                       <span className="mx-2">•</span>
                       <MapPin className="h-4 w-4 mr-1" />
-                      <span className="text-sm">{user.location}</span>
+                      <span className="text-sm">{profile.location}</span>
                     </>
                   )}
                 </div>
@@ -270,42 +225,53 @@ export default function UserProfilePage({ params }: { params: Params }) {
             </div>
 
             {/* Bio */}
-            <p className="text-foreground mb-4 max-w-3xl">{user.bio}</p>
+            <p className="text-foreground mb-4 max-w-3xl">{profile.bio}</p>
 
             {/* Social & Stats */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap gap-3 mb-4 md:mb-0">
-                {user.social?.website && (
+                {profile.social?.website && (
                   <a
-                    href={`https://${user.social.website}`}
+                    href={`https://${profile.social.website}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
                     <Globe className="h-4 w-4 mr-1" />
-                    {user.social.website}
+                    {profile.social.website}
                   </a>
                 )}
-                {user.social?.twitter && (
+                {profile.social?.twitter && (
                   <a
-                    href={`https://twitter.com/${user.social.twitter}`}
+                    href={`https://twitter.com/${profile.social.twitter}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
                     <Twitter className="h-4 w-4 mr-1" />
-                    @{user.social.twitter}
+                    @{profile.social.twitter}
                   </a>
                 )}
-                {user.social?.github && (
+                {profile.social?.github && (
                   <a
-                    href={`https://github.com/${user.social.github}`}
+                    href={`https://github.com/${profile.social.github}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-sm text-muted-foreground hover:text-foreground"
                   >
                     <Github className="h-4 w-4 mr-1" />
-                    {user.social.github}
+                    {profile.social.github}
+                  </a>
+                )}
+                {profile.social?.linkedin && (
+                  <a
+                    href={`https://linkedin.com/in/${profile.social.linkedin}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <Linkedin className="h-4 w-4 mr-1" />
+                    {profile.social.linkedin}
                   </a>
                 )}
               </div>
@@ -319,13 +285,13 @@ export default function UserProfilePage({ params }: { params: Params }) {
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="font-semibold mr-1">{user.following}</span>
+                  <span className="font-semibold mr-1">{profile.stats.following}</span>
                   <span className="text-muted-foreground text-sm">
                     Following
                   </span>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Joined {formatDate(user.createdAt)}
+                  Joined {formatDate(profile.createdAt)}
                 </div>
               </div>
             </div>
@@ -360,40 +326,96 @@ export default function UserProfilePage({ params }: { params: Params }) {
                 <ChevronDown className="h-4 w-4 ml-1" />
               </button>
             </div>
-            <div className="grid-masonry">
-              {MOCK_ASSETS.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} />
-              ))}
-            </div>
+            
+            {isLoadingAssets ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : assetsError ? (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">{assetsError}</p>
+                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                  Retry
+                </Button>
+              </div>
+            ) : assets.length > 0 ? (
+              <div className="grid-masonry">
+                {assets.map((asset) => (
+                  <AssetCard key={asset.id} asset={asset} />
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">No assets found.</p>
+                {isOwnProfile && (
+                  <Link href="/upload">
+                    <Button variant="outline" className="mt-4">
+                      Upload your first asset
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {MOCK_PROJECTS.map((proj) => (
-                <ProjectCard
-                  key={proj.id}
-                  project={proj}
-                  username={user.username}
-                />
-              ))}
+            {isLoadingProjects ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : projects.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={{
+                      id: project.id,
+                      title: project.title,
+                      description: project.description || '',
+                      thumbnail: project.thumbnail || '',
+                      assetCount: project.assetCount || 0,
+                      createdAt: new Date(project.createdAt)
+                    }}
+                    username={profile.username || ''}
+                  />
+                ))}
 
-              {isOwnProfile && (
-                <Link
-                  href="/projects/new"
-                  className="border-2 border-dashed rounded-lg border-muted hover:border-pixelshelf-primary p-6 flex flex-col items-center justify-center text-center min-h-[300px] transition-colors"
-                >
-                  <div className="rounded-full bg-muted p-3 mb-4">
-                    <FolderKanban className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">
-                    Create a New Project
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Organize your assets into a project to showcase your work
-                  </p>
-                </Link>
-              )}
-            </div>
+                {isOwnProfile && (
+                  <Link
+                    href="/projects/new"
+                    className="border-2 border-dashed rounded-lg border-muted hover:border-pixelshelf-primary p-6 flex flex-col items-center justify-center text-center min-h-[300px] transition-colors"
+                  >
+                    <div className="rounded-full bg-muted p-3 mb-4">
+                      <FolderKanban className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">
+                      Create a New Project
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Organize your assets into a project to showcase your work
+                    </p>
+                  </Link>
+                )}
+              </div>
+            ) : projectsError ? (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">{projectsError}</p>
+                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">No projects found.</p>
+                {isOwnProfile && (
+                  <Link href="/projects/new">
+                    <Button variant="outline" className="mt-4">
+                      Create your first project
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

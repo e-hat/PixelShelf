@@ -4,33 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { api, ApiError } from '@/lib/api/api-client';
 import { toast } from 'sonner';
-
-export type UserProfile = {
-  id: string;
-  name: string;
-  username: string;
-  email?: string;
-  bio: string | null;
-  image: string | null;
-  bannerImage: string | null;
-  location: string | null;
-  subscriptionTier: string;
-  createdAt: string;
-  social: {
-    twitter?: string;
-    github?: string;
-    website?: string;
-    linkedin?: string;
-  } | null;
-  stats: {
-    followers: number;
-    following: number;
-    assets: number;
-    projects: number;
-  };
-  isFollowing: boolean;
-  isCurrentUser: boolean;
-};
+import { UserProfile } from '@/types';
 
 export function useUserProfile(username: string) {
   const { data: session } = useSession();
@@ -41,30 +15,41 @@ export function useUserProfile(username: string) {
   const [followerCount, setFollowerCount] = useState(0);
   
   const fetchProfile = useCallback(async () => {
-    if (!username) return;
+    if (!username) {
+      setError("Username is required");
+      setIsLoading(false);
+      return;
+    }
     
     try {
       setIsLoading(true);
-      
-      const data = await api.users.getProfile(username);
-      
-      setProfile(data);
-      setIsFollowing(data.isFollowing);
-      setFollowerCount(data.stats.followers);
       setError(null);
-    } catch (err) {
-      console.error('Error fetching user profile:', err);
-      setError(err instanceof ApiError ? err.message : 'Failed to load user profile');
       
-      if (err instanceof ApiError && err.status === 404) {
-        toast.error('User not found');
-      } else {
-        toast.error('Failed to load user profile');
+      // For development purposes, if the API isn't ready yet, we can use mock data
+      // This way the UI can still be developed/tested
+      try {
+        const data = await api.users.getProfile(username);
+        
+        setProfile(data);
+        setIsFollowing(data.isFollowing);
+        setFollowerCount(data.stats.followers);
+      } catch (err) {
+        console.error('Error fetching user profile:', err);
+        if (err instanceof ApiError && err.status === 404) {
+          setError("User not found");
+        } else {
+          setError(err instanceof ApiError ? err.message : 'Failed to load user profile');
+        }
+        
+        throw err; // Re-throw to prevent further processing
       }
+    } catch (err) {
+      // Error is already handled in the inner try/catch
+      console.error('Error in profile fetch:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [username]);
+  }, [username, session?.user?.username]);
   
   const followUser = useCallback(async () => {
     if (!profile || !session) {
@@ -101,7 +86,7 @@ export function useUserProfile(username: string) {
   
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile, username]);
+  }, [fetchProfile]);
   
   return {
     profile,

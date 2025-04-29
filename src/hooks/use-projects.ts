@@ -1,20 +1,30 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, ApiError } from '@/lib/api/api-client';
 import { toast } from 'sonner';
 import { Project, ProjectQueryParams, UseProjects } from '@/types';
 
-export function useProjects(options: ProjectQueryParams = {}): UseProjects {
+export function useProjects(options: ProjectQueryParams | null = {}): UseProjects {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(options.page || 1);
+  const [page, setPage] = useState(options?.page || 1);
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
+  // Use refs to track previous options and prevent unnecessary refetches
+  const prevOptionsRef = useRef<string | null>(null);
+  
   const fetchProjects = useCallback(async (reset = false) => {
+    // If options is null, don't fetch anything
+    if (!options) {
+      setIsLoading(false);
+      setProjects([]);
+      return;
+    }
+    
     try {
       const currentPage = reset ? 1 : page;
       
@@ -49,7 +59,6 @@ export function useProjects(options: ProjectQueryParams = {}): UseProjects {
     } catch (err) {
       console.error('Error fetching projects:', err);
       setError(err instanceof ApiError ? err.message : 'Failed to load projects');
-      toast.error('Failed to load projects');
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -68,21 +77,22 @@ export function useProjects(options: ProjectQueryParams = {}): UseProjects {
   }, [fetchProjects]);
   
   useEffect(() => {
-    fetchProjects(true);
-  }, [
-    fetchProjects,
-    options.userId,
-    options.username,
-    options.search,
-    options.sort,
-    options.limit,
-  ]);
+    // Convert options to string for comparison
+    const optionsString = options ? JSON.stringify(options) : null;
+    
+    // Only fetch if options have changed
+    if (optionsString !== prevOptionsRef.current) {
+      setPage(1);
+      fetchProjects(true);
+      prevOptionsRef.current = optionsString;
+    }
+  }, [fetchProjects, options]);
   
   useEffect(() => {
-    if (page > 1) {
+    if (page > 1 && options) {
       fetchProjects(false);
     }
-  }, [page, fetchProjects]);
+  }, [page, fetchProjects, options]);
   
   return {
     projects,
