@@ -1,3 +1,5 @@
+// app/notifications/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,127 +14,36 @@ import {
   Loader2, 
   Heart, 
   MessageSquare, 
-  UserPlus, 
+  UserPlus,
   CheckCheck,
-  Info
+  Info,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getRelativeTime } from '@/lib/utils';
-
-type Notification = {
-  id: string;
-  type: 'FOLLOW' | 'LIKE' | 'COMMENT' | 'MESSAGE' | 'SYSTEM';
-  content: string;
-  linkUrl?: string;
-  read: boolean;
-  createdAt: string;
-  sender?: {
-    id: string;
-    name: string;
-    username: string;
-    image: string;
-  };
-};
+import { useNotifications } from '@/hooks/use-notifications';
+import { Notification } from '@/types';
 
 export default function NotificationsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-  // Fetch notifications
-  const fetchNotifications = async (pageNum = 1, replace = true) => {
-    if (pageNum === 1) {
-      setIsLoading(true);
-    } else {
-      setIsLoadingMore(true);
-    }
-    
-    try {
-      const response = await fetch(`/api/notifications?page=${pageNum}&limit=20`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications');
-      }
-      
-      const data = await response.json();
-      
-      if (replace) {
-        setNotifications(data.notifications);
-      } else {
-        setNotifications(prev => [...prev, ...data.notifications]);
-      }
-      
-      setUnreadCount(data.unreadCount);
-      setTotalPages(data.pagination.totalPages);
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
-      setError('Failed to load notifications. Please try again.');
-      toast.error('Failed to load notifications');
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
-
-  // Load more notifications
-  const loadMore = () => {
-    if (page < totalPages) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchNotifications(nextPage, false);
-    }
-  };
-
-  // Mark notifications as read
-  const markAsRead = async (ids?: string[]) => {
-    try {
-      const payload = ids ? { ids } : { all: true };
-      
-      const response = await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to mark notifications as read');
-      }
-      
-      // Update local state
-      if (ids) {
-        setNotifications(prev => 
-          prev.map(notification => 
-            ids.includes(notification.id) 
-              ? { ...notification, read: true } 
-              : notification
-          )
-        );
-        
-        // Update unread count
-        const markedCount = ids.length;
-        setUnreadCount(prev => Math.max(0, prev - markedCount));
-      } else {
-        // All notifications marked as read
-        setNotifications(prev => 
-          prev.map(notification => ({ ...notification, read: true }))
-        );
-        setUnreadCount(0);
-      }
-      
-      toast.success(ids ? 'Notification marked as read' : 'All notifications marked as read');
-    } catch (err) {
-      console.error('Error marking notifications as read:', err);
-      toast.error('Failed to mark notifications as read');
-    }
-  };
+  
+  // Use the notifications hook to manage notifications state
+  const { 
+    notifications,
+    unreadCount,
+    isLoading,
+    error,
+    page,
+    totalPages,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+    reload,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications();
 
   // Handle notification click
   const handleNotificationClick = async (notification: Notification) => {
@@ -147,15 +58,6 @@ export default function NotificationsPage() {
     }
   };
 
-  // Load notifications on mount
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetchNotifications();
-    } else if (status === 'unauthenticated') {
-      router.push('/login');
-    }
-  }, [status, router]);
-
   // Check for authentication
   if (status === 'loading') {
     return (
@@ -165,8 +67,23 @@ export default function NotificationsPage() {
     );
   }
 
-  if (!session) {
-    return null; // Will redirect in useEffect
+  if (status === 'unauthenticated') {
+    return (
+      <div className="container max-w-4xl mx-auto px-4 py-12">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="bg-muted p-6 rounded-full">
+            <Bell className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <h1 className="text-2xl font-bold">Sign in to view notifications</h1>
+          <p className="text-muted-foreground">
+            You need to sign in to access your notifications.
+          </p>
+          <Button variant="pixel" onClick={() => router.push('/login')}>
+            Sign In
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   // Get notification icon based on type
@@ -204,7 +121,7 @@ export default function NotificationsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => markAsRead()}
+            onClick={markAllAsRead}
             className="text-sm"
           >
             <CheckCheck className="h-4 w-4 mr-2" />
@@ -219,8 +136,12 @@ export default function NotificationsPage() {
         </div>
       ) : error ? (
         <div className="text-center py-12">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
           <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={() => fetchNotifications()}>Try again</Button>
+          <Button onClick={reload} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try again
+          </Button>
         </div>
       ) : notifications.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-muted/30">
@@ -247,7 +168,7 @@ export default function NotificationsPage() {
                       {notification.sender.image ? (
                         <Image
                           src={notification.sender.image}
-                          alt={notification.sender.name}
+                          alt={notification.sender.name || ''}
                           width={40}
                           height={40}
                           className="object-cover"
@@ -293,7 +214,7 @@ export default function NotificationsPage() {
       )}
       
       {/* Load more button */}
-      {page < totalPages && (
+      {hasMore && (
         <div className="flex justify-center mt-6">
           <Button
             variant="outline"

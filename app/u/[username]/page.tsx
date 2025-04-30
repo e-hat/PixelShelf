@@ -1,3 +1,5 @@
+// app/u/[username]/page.tsx
+
 'use client';
 
 import { useState, useEffect, use } from 'react';
@@ -39,7 +41,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
   const [activeTab, setActiveTab] = useState<"assets" | "projects">("assets");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // Use the existing hooks to fetch user data, assets, and projects
+  // Use the hooks to fetch user data, assets, and projects
   const { 
     profile, 
     isLoading: isLoadingProfile, 
@@ -50,7 +52,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
     unfollowUser 
   } = useUserProfile(username);
   
-  // Only fetch assets when profile is loaded to prevent dependency loops
+  // Only fetch assets when profile is loaded
   const { 
     assets, 
     isLoading: isLoadingAssets, 
@@ -60,7 +62,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
     limit: 12 
   } : null);
   
-  // Only fetch projects when profile is loaded to prevent dependency loops
+  // Only fetch projects when profile is loaded
   const { 
     projects, 
     isLoading: isLoadingProjects,
@@ -89,7 +91,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
     }
   };
 
-  const handleMessage = () => {
+  const handleMessage = async () => {
     if (!session) {
       toast.error('Please sign in to message users');
       return;
@@ -97,10 +99,15 @@ export default function UserProfilePage({ params }: { params: Params }) {
     
     if (!profile) return;
     
-    toast.success(`Started a chat with ${profile.name}`);
-    // In a real implementation, you would:
-    // 1. Create a chat if it doesn't exist
-    // 2. Navigate to the chat page
+    try {
+      // In a real implementation, call the API to create a chat
+      // await api.chats.create(profile.id);
+      toast.success(`Started a chat with ${profile.name}`);
+      // Navigate to chat
+      // router.push(`/chat?with=${profile.id}`);
+    } catch (error) {
+      toast.error('Failed to start conversation');
+    }
   };
 
   // Loading state
@@ -155,10 +162,10 @@ export default function UserProfilePage({ params }: { params: Params }) {
         )}
       </div>
 
-      {/* Profile info - keeping the exact styling as specified */}
+      {/* Profile info */}
       <div className="container px-4 md:px-6">
         <div className="flex flex-col md:flex-row mb-8">
-          {/* Avatar - keeping the exact styling as specified */}
+          {/* Avatar */}
           <div className="relative mb-4 md:mb-0 md:mr-6 -mt-24 md:-mt-16">
             <div className="rounded-full overflow-hidden border-4 border-background h-32 w-32 md:h-48 md:w-48 bg-background relative">
               {profile.image ? (
@@ -363,6 +370,13 @@ export default function UserProfilePage({ params }: { params: Params }) {
               <div className="py-12 flex justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
+            ) : projectsError ? (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">{projectsError}</p>
+                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                  Retry
+                </Button>
+              </div>
             ) : projects.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects.map((project) => (
@@ -396,13 +410,6 @@ export default function UserProfilePage({ params }: { params: Params }) {
                     </p>
                   </Link>
                 )}
-              </div>
-            ) : projectsError ? (
-              <div className="py-12 text-center">
-                <p className="text-muted-foreground">{projectsError}</p>
-                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
-                  Retry
-                </Button>
               </div>
             ) : (
               <div className="py-12 text-center">

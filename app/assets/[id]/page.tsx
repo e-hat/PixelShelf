@@ -1,95 +1,117 @@
+// app/assets/[id]/page.tsx
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { 
-  Heart, MessageSquare, Share, Download, User, FileAudio, Box, FileText,
-  Play, Pause
+  Heart, 
+  MessageSquare, 
+  Share, 
+  Download, 
+  User, 
+  FileAudio, 
+  Box, 
+  FileText,
+  Play, 
+  Pause, 
+  Loader2, 
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDate, getRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// Mock data for MVP
-const MOCK_ASSET = {
-  id: '1',
-  title: 'Forest Tileset',
-  description: 'A complete tileset for forest environments with 64x64 pixel art tiles. Includes ground, water, trees, rocks, and decorative elements. Perfect for 2D platformers or RPGs with a natural setting.',
-  fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
-  fileType: 'IMAGE',
-  projectId: '1',
-  project: {
-    id: '1',
-    title: 'Woodland Warriors',
-  },
-  user: {
-    id: '1',
-    name: 'PixelQueen',
-    username: 'pixelqueen',
-    image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-  },
-  likes: 156,
-  tags: ['forest', 'tileset', 'pixel-art', '2d', 'environment'],
-  createdAt: new Date('2023-10-15'),
-  comments: [
-    {
-      id: '1',
-      content: 'Love the lighting on these tiles! The shadows give it such depth.',
-      user: {
-        id: '2',
-        name: 'GameArtPro',
-        username: 'gameartpro',
-        image: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d',
-      },
-      createdAt: new Date('2023-10-16'),
-    },
-    {
-      id: '2',
-      content: 'This is exactly what I needed for my game project. The water animation is especially well done.',
-      user: {
-        id: '3',
-        name: 'IndieDevMaster',
-        username: 'indiedevmaster',
-        image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36',
-      },
-      createdAt: new Date('2023-10-17'),
-    },
-  ],
-};
+import { api, ApiError } from '@/lib/api/api-client';
+import { Asset, Comment } from '@/types';
 
 export default function AssetDetailPage() {
-  const { id } = useParams();            // ← pull the `id` from the URL
+  const { id } = useParams();
   const { data: session } = useSession();
   const router = useRouter();
 
-  // If you still want to use a mock while you build
-  const [asset, setAsset] = useState(MOCK_ASSET);
-  // … rest of your state …
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(asset.likes);
+  const [likeCount, setLikeCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [comment, setComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [comments, setComments] = useState(asset.comments);
+  const messageEndRef = useRef<HTMLDivElement>(null);
 
-  // to fetch the real asset at `api.assets.getById(id)`:
+  // Fetch asset and comments
   useEffect(() => {
-    if (!id) return;
-    // fetch from API instead of the mock…
-    // api.assets.getById(id).then(setAsset)…
+    async function fetchAssetData() {
+      if (!id) return;
+      
+      setIsLoading(true);
+      
+      try {
+        // Fetch asset data
+        const assetData = await api.assets.getById(id as string);
+        
+        setAsset(assetData);
+        setLiked(assetData.likedByUser || false);
+        setLikeCount(assetData.likes || 0);
+        
+        // Comments might be included in the asset data
+        if (assetData.comments) {
+          setComments(assetData.comments);
+        } else {
+          // If not, fetch comments separately
+          try {
+            const commentsData = await api.comments.getForAsset(id as string);
+            setComments(commentsData.comments || []);
+          } catch (commError) {
+            console.error('Error fetching comments:', commError);
+            // Don't set an error for comments, just show empty
+          }
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching asset:', err);
+        setError(err instanceof ApiError ? err.message : 'Failed to load asset');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchAssetData();
   }, [id]);
 
-  const handleLike = () => {
+  // Scroll to bottom of comments when new one is added
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
+
+  const handleLike = async () => {
     if (!session) {
       toast.error('Please sign in to like this asset');
       return;
     }
-    setLikeCount(liked ? likeCount - 1 : likeCount + 1);
-    setLiked(!liked);
+    
+    if (!asset) return;
+    
+    try {
+      if (liked) {
+        await api.likes.unlikeAsset(asset.id);
+      } else {
+        await api.likes.likeAsset(asset.id);
+      }
+      
+      setLikeCount(liked ? likeCount - 1 : likeCount + 1);
+      setLiked(!liked);
+      toast.success(liked ? 'Like removed' : 'Asset liked');
+    } catch (error) {
+      console.error('Error liking/unliking asset:', error);
+      toast.error('Failed to process your request');
+    }
   };
 
   const handleShare = () => {
@@ -98,34 +120,43 @@ export default function AssetDetailPage() {
   };
 
   const handleDownload = () => {
+    if (!asset) return;
+    
+    // Create an anchor element and trigger download
+    const link = document.createElement('a');
+    link.href = asset.fileUrl;
+    link.download = asset.title;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
     toast.success('Download started');
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!session) {
       toast.error('Please sign in to comment');
       return;
     }
-    if (!comment.trim()) return;
+    
+    if (!asset || !comment.trim()) return;
+    
     setIsSubmittingComment(true);
+    
     try {
-      await new Promise((r) => setTimeout(r, 1000));
-      const newComment = {
-        id: Date.now().toString(),
-        content: comment,
-        user: {
-          id: session.user.id,
-          name: session.user.name || 'Anonymous',
-          username: session.user.username || 'user',
-          image: session.user.image || '',
-        },
-        createdAt: new Date(),
-      };
-      setComments([newComment, ...comments]);
+      const newComment = await api.comments.create({
+        assetId: asset.id,
+        content: comment
+      });
+      
+      // Add the new comment to the state
+      setComments(prev => [newComment, ...prev]);
       setComment('');
       toast.success('Comment added');
-    } catch {
+    } catch (error) {
+      console.error('Error adding comment:', error);
       toast.error('Failed to add comment');
     } finally {
       setIsSubmittingComment(false);
@@ -133,6 +164,8 @@ export default function AssetDetailPage() {
   };
 
   const renderAssetPreview = () => {
+    if (!asset) return null;
+    
     switch (asset.fileType) {
       case 'IMAGE':
         return (
@@ -164,7 +197,7 @@ export default function AssetDetailPage() {
             </Button>
           </div>
         );
-      // … other cases …
+      // Add cases for other file types
       default:
         return (
           <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
@@ -173,6 +206,27 @@ export default function AssetDetailPage() {
         );
     }
   };
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  
+  // Error state
+  if (error || !asset) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center text-center">
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Asset not found</h2>
+        <p className="text-muted-foreground mb-6">{error || 'The asset you are looking for could not be found'}</p>
+        <Button variant="outline" onClick={() => router.push('/')}>Return to Home</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -214,7 +268,7 @@ export default function AssetDetailPage() {
             <h1 className="text-3xl font-bold mb-2">{asset.title}</h1>
             <p className="text-muted-foreground whitespace-pre-line">{asset.description}</p>
           </div>
-          {asset.tags.length > 0 && (
+          {asset.tags && asset.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {asset.tags.map((tag, i) => (
                 <Link
@@ -264,7 +318,7 @@ export default function AssetDetailPage() {
                           {c.user.image
                             ? <Image
                                 src={c.user.image}
-                                alt={c.user.name}
+                                alt={c.user.name || ''}
                                 fill
                                 className="object-cover"
                                 placeholder="blur"
@@ -278,7 +332,7 @@ export default function AssetDetailPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
                         <Link href={`/u/${c.user.username}`} className="font-medium hover:text-pixelshelf-primary">
-                          {c.user.name}
+                          {c.user.name || c.user.username}
                         </Link>
                         <span className="text-xs text-muted-foreground">
                           {getRelativeTime(c.createdAt)}
@@ -289,6 +343,7 @@ export default function AssetDetailPage() {
                   </div>
                 </div>
               ))}
+              <div ref={messageEndRef} />
             </div>
           </div>
         </div>
@@ -296,44 +351,48 @@ export default function AssetDetailPage() {
         {/* ——————————————————————————————  Sidebar */}
         <div className="space-y-6">
           {/* creator card */}
-          <div className="border rounded-lg p-4 shadow-sm">
-            <div className="flex items-center space-x-3 mb-3">
-              <Link href={`/u/${asset.user.username}`}>
-                <div className="relative h-12 w-12 rounded-full overflow-hidden bg-muted">
-                  {asset.user.image
-                    ? <Image
-                        src={asset.user.image}
-                        alt={asset.user.name}
-                        fill
-                        className="object-cover"
-                        placeholder="blur"
-                        blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    : <User className="h-12 w-12 p-2 text-muted-foreground" />}
-                </div>
-              </Link>
-              <div className="flex-1 min-w-0">
-                <Link href={`/u/${asset.user.username}`} className="font-medium hover:text-pixelshelf-primary text-lg">
-                  {asset.user.name}
+          {asset.user && (
+            <div className="border rounded-lg p-4 shadow-sm">
+              <div className="flex items-center space-x-3 mb-3">
+                <Link href={`/u/${asset.user.username}`}>
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden bg-muted">
+                    {asset.user.image
+                      ? <Image
+                          src={asset.user.image}
+                          alt={asset.user.name || ''}
+                          fill
+                          className="object-cover"
+                          placeholder="blur"
+                          blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                      : <User className="h-12 w-12 p-2 text-muted-foreground" />}
+                  </div>
                 </Link>
-                <p className="text-sm text-muted-foreground">
-                  @{asset.user.username}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <Link href={`/u/${asset.user.username}`} className="font-medium hover:text-pixelshelf-primary text-lg">
+                    {asset.user.name || asset.user.username}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    @{asset.user.username}
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <Button asChild variant="outline" className="w-full">
+                  <Link href={`/u/${asset.user.username}`}>View Profile</Link>
+                </Button>
+                {session && session.user.id !== asset.user.id && (
+                  <Button asChild variant="pixel" className="w-full">
+                    <Link href={`/chat?with=${asset.user.id}`}>Message</Link>
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="flex space-x-2">
-              <Button asChild variant="outline" className="w-full">
-                <Link href={`/u/${asset.user.username}`}>View Profile</Link>
-              </Button>
-              <Button asChild variant="pixel" className="w-full">
-                <Link href={`/chat/${asset.user.id}`}>Message</Link>
-              </Button>
-            </div>
-          </div>
+          )}
 
           {/* project card */}
-          {asset.projectId && (
+          {asset.projectId && asset.project && (
             <div className="border rounded-lg p-4 shadow-sm">
               <h3 className="font-medium mb-2">Part of Project</h3>
               <Link

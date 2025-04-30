@@ -1,3 +1,5 @@
+// src/components/feature-specific/home/home-feed.tsx
+
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';

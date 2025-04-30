@@ -12,6 +12,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { Chat, Message } from '@/types';
 import { useNotificationStore } from '@/store';
+import { api } from '@/lib/api/api-client';
 
 // Define the Chat context interface
 interface ChatContextType {
@@ -65,19 +66,12 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     setChatError(null);
     
     try {
-      // In a real app, this would be an API call to fetch chats
-      // For MVP, we're using mocked data
-      const response = await fetch('/api/chats');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch chats');
-      }
-      
-      const data = await response.json();
-      setChats(data.chats);
+      // Use the API to fetch chats
+      const response = await api.chats.getAll();
+      setChats(response.chats);
       
       // Check if there are any unread chats
-      const hasUnread = data.chats.some((chat: Chat) => chat.unreadCount && chat.unreadCount > 0);
+      const hasUnread = response.chats.some((chat: Chat) => chat.unreadCount && chat.unreadCount > 0);
       setHasNewMessages(hasUnread);
     } catch (error) {
       console.error('Error fetching chats:', error);
@@ -96,20 +90,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     setMessageError(null);
     
     try {
-      // In a real app, this would be an API call to fetch messages
-      // For MVP, we're using mock data from the selected chat
-      const chat = chats.find(chat => chat.id === chatId);
-      
-      if (!chat) {
-        throw new Error('Chat not found');
-      }
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Update the selected chat with messages
-      // In a real implementation, this would fetch messages from the API
-      setSelectedChat(chat);
+      // Use the API to fetch chat details with messages
+      const chatData = await api.chats.getById(chatId);
+      setSelectedChat(chatData);
     } catch (error) {
       console.error('Error fetching messages:', error);
       setMessageError('Failed to load messages');
@@ -117,15 +100,15 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [chats, session?.user?.id]);
+  }, [session?.user?.id]);
 
   // Mark a chat as read
   const markChatAsRead = useCallback(async (chatId: string) => {
     if (!session?.user?.id) return;
     
     try {
-      // In a real app, this would call the API to mark chat as read
-      // For MVP, we'll update the state directly
+      // Use the API to mark chat as read
+      await api.chats.markAsRead(chatId);
       
       // Update the chat in the list
       setChats(prevChats => 
@@ -182,28 +165,16 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     setMessageError(null);
     
     try {
-      // In a real app, this would send the message to the API
-      // For MVP, we'll simulate this
-      const newMessage: Message = {
-        id: `temp-${Date.now()}`,
-        content,
-        chatId: selectedChat.id,
-        senderId: session.user.id,
-        receiverId: selectedChat.participants[0].id,
-        read: false,
-        createdAt: new Date().toISOString(),
-      };
+      // Use the API to send a message
+      const newMessage = await api.chats.sendMessage(selectedChat.id, content);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Update the chat with the new message
+      // Update the selected chat with the new message
       const updatedChat = {
         ...selectedChat,
         lastMessage: {
           content,
           senderId: session.user.id,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         messages: [...(selectedChat.messages || []), newMessage],
       };
@@ -214,11 +185,18 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       // Update the chat in the list
       setChats(prevChats => 
         prevChats.map(chat => 
-          chat.id === selectedChat.id ? updatedChat : chat
+          chat.id === selectedChat.id 
+            ? {
+                ...chat,
+                lastMessage: {
+                  content,
+                  senderId: session.user.id,
+                  createdAt: new Date().toISOString(),
+                },
+              } 
+            : chat
         )
       );
-      
-      // In a real app, we'd also handle real-time updates here
     } catch (error) {
       console.error('Error sending message:', error);
       setMessageError('Failed to send message');
@@ -255,32 +233,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     setChatError(null);
     
     try {
-      // In a real app, this would create a new chat via API
-      // For MVP, we'll simulate this
+      // Use the API to create a new chat
+      const newChat = await api.chats.create(userId);
       
-      // Fetch user info (mock for MVP)
-      const userResponse = await fetch(`/api/users/${userId}`);
-      if (!userResponse.ok) {
-        throw new Error('Failed to fetch user information');
+      // Add empty messages array if not included
+      if (!newChat.messages) {
+        newChat.messages = [];
       }
-      
-      const userData = await userResponse.json();
-      
-      // Create new chat
-      const newChat: Chat = {
-        id: `new-${Date.now()}`,
-        participants: [
-          {
-            id: userData.id,
-            name: userData.name,
-            username: userData.username,
-            image: userData.image,
-          },
-        ],
-        lastMessage: undefined,
-        unreadCount: 0,
-        messages: [],
-      };
       
       // Add to chat list
       setChats(prevChats => [newChat, ...prevChats]);
@@ -288,7 +247,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       // Select the new chat
       setSelectedChat(newChat);
       
-      toast.success(`Started a conversation with ${userData.name}`);
+      const participantName = newChat.participants?.[0]?.name || newChat.participants?.[0]?.username || 'user';
+      toast.success(`Started a conversation with ${participantName}`);
     } catch (error) {
       console.error('Error creating chat:', error);
       setChatError('Failed to create chat');

@@ -1,9 +1,12 @@
+// app/u/[username]/projects/[id]/page.tsx
+
 'use client';
 
 import { useState, useEffect, use } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   User, 
   Heart, 
@@ -15,147 +18,111 @@ import {
   Plus,
   FolderKanban,
   ImageIcon,
-  Calendar
+  Calendar,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AssetCard from '@/components/feature-specific/asset-card';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
-import { ASSET_TYPES } from '@/constants';
-
-// Mock data for the MVP
-const MOCK_PROJECT = {
-  id: '1',
-  title: 'Woodland Warriors',
-  description: 'A 2D action platformer set in a mystical forest world with hand-crafted pixel art. Players take control of animal heroes defending their home from corruption.',
-  thumbnail: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1',
-  createdAt: new Date('2023-05-12'),
-  updatedAt: new Date('2023-10-15'),
-  isPublic: true,
-  likes: 86,
-  user: {
-    id: '1',
-    name: 'Alex Johnson',
-    username: 'pixelartist',
-    image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-  },
-  assets: [
-    {
-      id: '1',
-      title: 'Forest Tileset',
-      description: 'A complete tileset for forest environments with 64x64 pixel art tiles.',
-      fileUrl: 'https://images.unsplash.com/photo-1561735746-003319594ef0',
-      fileType: 'IMAGE' as keyof typeof ASSET_TYPES,
-      userId: '1',
-      projectId: '1',
-      isPublic: true,
-      tags: ['tileset', 'environment', 'forest'],
-      createdAt: new Date('2023-10-15'),
-      updatedAt: new Date('2023-10-15'),
-      user: {
-        id: '1',
-        name: 'Alex Johnson',
-        username: 'pixelartist',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-      },
-      likes: 156,
-      comments: 24,
-    },
-    {
-      id: '2',
-      title: 'Character Sprite Sheet',
-      description: 'Main hero character with walking, running, and attack animations.',
-      fileUrl: 'https://images.unsplash.com/photo-1633467067804-c08b17fd2a8a',
-      fileType: 'IMAGE' as keyof typeof ASSET_TYPES,
-      userId: '1',
-      projectId: '1',
-      isPublic: true,
-      tags: ['character', 'sprite-sheet', 'animation'],
-      createdAt: new Date('2023-10-12'),
-      updatedAt: new Date('2023-10-12'),
-      user: {
-        id: '1',
-        name: 'Alex Johnson',
-        username: 'pixelartist',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-      },
-      likes: 243,
-      comments: 43,
-    },
-    {
-      id: '3',
-      title: 'Game UI Elements',
-      description: 'Complete UI kit with buttons, panels, and icons in a natural, wooden style.',
-      fileUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9',
-      fileType: 'IMAGE' as keyof typeof ASSET_TYPES,
-      userId: '1',
-      projectId: '1',
-      isPublic: true,
-      tags: ['ui', 'interface', 'buttons'],
-      createdAt: new Date('2023-10-20'),
-      updatedAt: new Date('2023-10-20'),
-      user: {
-        id: '1',
-        name: 'Alex Johnson',
-        username: 'pixelartist',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-      },
-      likes: 89,
-      comments: 12,
-    },
-    {
-      id: '5',
-      title: 'Forest Ambience',
-      description: 'Pack of atmospheric forest sound effects for level ambience.',
-      fileUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745',
-      fileType: 'AUDIO' as keyof typeof ASSET_TYPES,
-      userId: '1',
-      projectId: '1',
-      isPublic: true,
-      tags: ['audio', 'sound-effects', 'atmosphere'],
-      createdAt: new Date('2023-10-23'),
-      updatedAt: new Date('2023-10-23'),
-      user: {
-        id: '1',
-        name: 'Alex Johnson',
-        username: 'pixelartist',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-      },
-      likes: 62,
-      comments: 8,
-    },
-  ]  
-};
+import { api, ApiError } from '@/lib/api/api-client';
+import { Project, Asset } from '@/types';
 
 type Params = Promise<{ username: string; id: string }>;
 
 export default function ProjectDetailPage({ params }: { params: Params }) {
-  // unwrap the promised params
+  // Unwrap the promised params
   const { username, id } = use(params);
 
   const { data: session } = useSession();
-  const [project, setProject] = useState(MOCK_PROJECT);
+  const router = useRouter();
+  const [project, setProject] = useState<Project | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(project.likes);
+  const [likeCount, setLikeCount] = useState(0);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  // Fetch project data
+  useEffect(() => {
+    async function fetchProjectData() {
+      setIsLoading(true);
+      try {
+        const projectData = await api.projects.getById(id);
+        setProject(projectData);
+        setLikeCount(projectData.likes || 0);
+        setLiked(projectData.likedByUser || false);
+        
+        // Assets should already be included in the project data
+        // But if not, you could fetch them separately
+        if (projectData.assets) {
+          setAssets(projectData.assets);
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching project:', err);
+        setError(err instanceof ApiError ? err.message : 'Failed to load project');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchProjectData();
+  }, [id]);
 
   const isOwner = session?.user?.username === username;
 
-  const handleLike = () => {
+  const handleLike = async () => {
     if (!session) {
       toast.error("Please sign in to like this project");
       return;
     }
-    setLikeCount((c) => (liked ? c - 1 : c + 1));
-    setLiked((l) => !l);
-    toast.success(liked ? "Removed like" : "Added like");
+    
+    try {
+      if (liked) {
+        await api.likes.unlikeProject(id);
+      } else {
+        await api.likes.likeProject(id);
+      }
+      
+      setLikeCount(prev => liked ? prev - 1 : prev + 1);
+      setLiked(!liked);
+      toast.success(liked ? "Removed like" : "Added like");
+    } catch (error) {
+      console.error('Error liking/unliking project:', error);
+      toast.error('Failed to process your request');
+    }
   };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     toast.success("Link copied to clipboard");
   };
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  
+  // Error state
+  if (error || !project) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center text-center">
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Project not found</h2>
+        <p className="text-muted-foreground mb-6">{error || 'The project you are looking for could not be found'}</p>
+        <Button variant="outline" onClick={() => router.push('/')}>Return to Home</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -233,7 +200,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
                   {project.user.image ? (
                     <Image
                       src={project.user.image}
-                      alt={project.user.name}
+                      alt={project.user.name || username}
                       fill
                       className="object-cover"
                       placeholder="blur"
@@ -250,7 +217,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
                   href={`/u/${username}`}
                   className="font-medium hover:text-pixelshelf-primary text-lg"
                 >
-                  {project.user.name}
+                  {project.user.name || username}
                 </Link>
                 <p className="text-sm text-muted-foreground">@{username}</p>
               </div>
@@ -276,7 +243,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
               </div>
               <div className="flex items-center">
                 <ImageIcon className="h-4 w-4 mr-2" />
-                {project.assets.length} assets
+                {project.assetCount || assets.length} assets
               </div>
               <div className="flex items-center">
                 <Heart className="h-4 w-4 mr-2" />
@@ -291,7 +258,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
       <div className="mb-12">
         <h2 className="text-xl font-semibold mb-3">About This Project</h2>
         <p className="text-muted-foreground whitespace-pre-line">
-          {project.description}
+          {project.description || 'No description provided.'}
         </p>
       </div>
 
@@ -331,13 +298,13 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {project.assets.length > 0 ? (
+        {assets && assets.length > 0 ? (
           <div
             className={
               viewMode === "grid" ? "grid-masonry" : "space-y-4"
             }
           >
-            {project.assets.map((asset) => (
+            {assets.map((asset) => (
               <AssetCard
                 key={asset.id}
                 asset={asset}
@@ -350,7 +317,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
             <FolderKanban className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-lg font-medium mb-2">No assets yet</h3>
             <p className="text-muted-foreground mb-4">
-              This project doesn’t have any assets yet.
+              This project doesn't have any assets yet.
             </p>
             {isOwner && (
               <Link href={`/upload?projectId=${id}`}>

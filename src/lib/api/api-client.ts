@@ -220,4 +220,14 @@ export const api = {
       return apiClient.get(`/api/search?${searchParams.toString()}`);
     },
   },
+
+  // Chats
+  chats: {
+    getAll: () => apiClient.get('/api/chats'),
+    getById: (id: string) => apiClient.get(`/api/chats/${id}`),
+    create: (userId: string) => apiClient.post('/api/chats', { userId }),
+    sendMessage: (chatId: string, content: string) => 
+      apiClient.post(`/api/chats/${chatId}/messages`, { content }),
+    markAsRead: (chatId: string) => apiClient.post(`/api/chats/${chatId}/read`),
+  },
 };

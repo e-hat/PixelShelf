@@ -1,6 +1,8 @@
+// app/settings/profile/page.tsx
+
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -26,28 +28,13 @@ import {
   Linkedin,
   Globe,
   MapPin,
-  ImageIcon
+  ImageIcon,
+  AlertCircle
 } from 'lucide-react';
+import { api, ApiError } from '@/lib/api/api-client';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 
-// Mock user data for the MVP
-const MOCK_USER = {
-  id: '1',
-  username: 'pixelartist',
-  name: 'Alex Johnson',
-  bio: 'Indie game developer and pixel artist. Creating retro-style games with modern gameplay. Currently working on my forest platformer "Woodland Warriors".',
-  image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-  bannerImage: 'https://images.unsplash.com/photo-1616031037011-287c29dd8ea2',
-  location: 'San Francisco, CA',
-  email: 'alex@example.com',
-  social: {
-    twitter: 'pixelartist',
-    github: 'pixeldev',
-    website: 'pixelartist.dev',
-    linkedin: 'alexjohnson',
-  },
-  subscriptionTier: 'FREE',
-};
-
+// Define validation schema
 const profileSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
   username: z.string().min(3, { message: 'Username must be at least 3 characters' })
@@ -66,31 +53,102 @@ export default function ProfileSettingsPage() {
   const { data: session, update } = useSession();
   const router = useRouter();
   const [isUpdating, setIsUpdating] = useState(false);
-  const [user, setUser] = useState(MOCK_USER);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [bannerImage, setBannerImage] = useState<File | null>(null);
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
   const bannerImageInputRef = useRef<HTMLInputElement>(null);
+  
+  // Set up uploadThing client for image uploads
+  const { startUpload: uploadProfileImage, isUploading: isUploadingProfile } = 
+    useUploadThing("profileImage");
+  const { startUpload: uploadBannerImage, isUploading: isUploadingBanner } = 
+    useUploadThing("projectImage"); // Reusing project image endpoint for banner
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ProfileFormValues>({
+  const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: user.name,
-      username: user.username,
-      bio: user.bio || '',
-      location: user.location || '',
-      website: user.social?.website || '',
-      twitter: user.social?.twitter || '',
-      github: user.social?.github || '',
-      linkedin: user.social?.linkedin || '',
+      name: '',
+      username: '',
+      bio: '',
+      location: '',
+      website: '',
+      twitter: '',
+      github: '',
+      linkedin: '',
     },
   });
+  
+  // Fetch user profile data
+  useEffect(() => {
+    async function fetchUserProfile() {
+      if (!session?.user?.id) return;
+      
+      setIsLoading(true);
+      
+      try {
+        // For full implementation, you'd fetch the user's profile from the API
+        // In this case, since we already have session data, we can start with that
+        // and extend it with a user profile API call if necessary
+        
+        // Initialize form with session data
+        form.reset({
+          name: session.user.name || '',
+          username: session.user.username || '',
+          bio: '', // We don't have bio in session
+          location: '',
+          website: '',
+          twitter: '',
+          github: '',
+          linkedin: '',
+        });
+        
+        // Set profile image from session
+        if (session.user.image) {
+          setProfileImagePreview(session.user.image);
+        }
+        
+        // Try to fetch additional user data if needed
+        try {
+          if (session.user.username) {
+            const userData = await api.users.getProfile(session.user.username);
+            
+            // Update form with full user data
+            form.reset({
+              name: userData.name || session.user.name || '',
+              username: userData.username || session.user.username || '',
+              bio: userData.bio || '',
+              location: userData.location || '',
+              website: userData.social?.website || '',
+              twitter: userData.social?.twitter || '',
+              github: userData.social?.github || '',
+              linkedin: userData.social?.linkedin || '',
+            });
+            
+            // Set banner image
+            if (userData.bannerImage) {
+              setBannerImagePreview(userData.bannerImage);
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching user profile:', err);
+          // Don't set an error here, as we already have some data from the session
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error initializing profile form:', err);
+        setError('Failed to load profile data');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchUserProfile();
+  }, [session, form]);
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -161,47 +219,70 @@ export default function ProfileSettingsPage() {
   };
 
   const onSubmit = async (data: ProfileFormValues) => {
+    if (!session) {
+      toast.error('You must be signed in to update your profile');
+      return;
+    }
+    
     setIsUpdating(true);
-
-    // In a real app, this would upload the images to storage and update the user profile in the database
-    // For the MVP, we'll simulate a successful update after a short delay
+    
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Update user state
-      setUser({
-        ...user,
-        name: data.name,
-        username: data.username,
-        bio: data.bio || '',
-        location: data.location || '',
-        image: profileImagePreview || user.image,
-        bannerImage: bannerImagePreview || user.bannerImage,
-        social: {
-          website: data.website || '',
-          twitter: data.twitter || '',
-          github: data.github || '',
-          linkedin: data.linkedin || '',
-        },
-      });
-
-      // In a real app, we would also update the session
+      // First, upload profile image if changed
+      let profileImageUrl = profileImagePreview;
+      if (profileImage) {
+        try {
+          const uploadResult = await uploadProfileImage([profileImage]);
+          if (uploadResult && uploadResult[0]?.ufsUrl) {
+            profileImageUrl = uploadResult[0].ufsUrl;
+          }
+        } catch (imageError) {
+          console.error('Error uploading profile image:', imageError);
+          toast.error('Failed to upload profile image');
+          // Continue with the rest of the profile update
+        }
+      }
+      
+      // Upload banner image if changed
+      let bannerImageUrl = bannerImagePreview;
+      if (bannerImage) {
+        try {
+          const uploadResult = await uploadBannerImage([bannerImage]);
+          if (uploadResult && uploadResult[0]?.ufsUrl) {
+            bannerImageUrl = uploadResult[0].ufsUrl;
+          }
+        } catch (bannerError) {
+          console.error('Error uploading banner image:', bannerError);
+          toast.error('Failed to upload banner image');
+          // Continue with the rest of the profile update
+        }
+      }
+      
+      // Update user profile
+      const profileData = {
+        ...data,
+        image: profileImageUrl,
+        bannerImage: bannerImageUrl,
+      };
+      
+      await api.users.updateProfile(profileData);
+      
+      // Update session with new user data
       if (update) {
         await update({
           ...session,
           user: {
-            ...session?.user,
+            ...session.user,
             name: data.name,
-            image: profileImagePreview || user.image,
+            username: data.username,
+            image: profileImageUrl,
           },
         });
       }
-
+      
       toast.success('Profile updated successfully!');
     } catch (error) {
       console.error('Profile update error:', error);
-      toast.error('Failed to update profile. Please try again.');
+      toast.error(error instanceof ApiError ? error.message : 'Failed to update profile. Please try again.');
     } finally {
       setIsUpdating(false);
     }
@@ -225,6 +306,33 @@ export default function ProfileSettingsPage() {
       </div>
     );
   }
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <SettingsLayout>
+        <div className="flex justify-center items-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </SettingsLayout>
+    );
+  }
+  
+  // Error state
+  if (error) {
+    return (
+      <SettingsLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Failed to load profile</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </SettingsLayout>
+    );
+  }
 
   return (
     <SettingsLayout>
@@ -243,7 +351,7 @@ export default function ProfileSettingsPage() {
           </TabsList>
 
           <TabsContent value="general" className="space-y-6">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Card>
                 <CardContent className="pt-6">
                   <div className="space-y-4">
@@ -254,10 +362,10 @@ export default function ProfileSettingsPage() {
                         </label>
                         <Input 
                           id="name" 
-                          {...register('name')} 
+                          {...form.register('name')} 
                         />
-                        {errors.name && (
-                          <p className="text-sm text-destructive">{errors.name.message}</p>
+                        {form.formState.errors.name && (
+                          <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -270,12 +378,12 @@ export default function ProfileSettingsPage() {
                           </span>
                           <Input 
                             id="username" 
-                            {...register('username')} 
+                            {...form.register('username')} 
                             className="rounded-l-none"
                           />
                         </div>
-                        {errors.username && (
-                          <p className="text-sm text-destructive">{errors.username.message}</p>
+                        {form.formState.errors.username && (
+                          <p className="text-sm text-destructive">{form.formState.errors.username.message}</p>
                         )}
                       </div>
                     </div>
@@ -286,12 +394,12 @@ export default function ProfileSettingsPage() {
                       </label>
                       <Textarea 
                         id="bio" 
-                        {...register('bio')} 
+                        {...form.register('bio')} 
                         rows={4}
                         placeholder="Tell other game developers about yourself and your work..."
                       />
-                      {errors.bio && (
-                        <p className="text-sm text-destructive">{errors.bio.message}</p>
+                      {form.formState.errors.bio && (
+                        <p className="text-sm text-destructive">{form.formState.errors.bio.message}</p>
                       )}
                     </div>
 
@@ -302,7 +410,7 @@ export default function ProfileSettingsPage() {
                       </label>
                       <Input 
                         id="location" 
-                        {...register('location')} 
+                        {...form.register('location')} 
                         placeholder="e.g., San Francisco, CA"
                       />
                     </div>
@@ -321,7 +429,7 @@ export default function ProfileSettingsPage() {
                       </label>
                       <Input 
                         id="website" 
-                        {...register('website')} 
+                        {...form.register('website')} 
                         placeholder="example.com"
                       />
                     </div>
@@ -337,7 +445,7 @@ export default function ProfileSettingsPage() {
                         </span>
                         <Input 
                           id="twitter" 
-                          {...register('twitter')} 
+                          {...form.register('twitter')} 
                           className="rounded-l-none"
                           placeholder="username"
                         />
@@ -351,7 +459,7 @@ export default function ProfileSettingsPage() {
                       </label>
                       <Input 
                         id="github" 
-                        {...register('github')} 
+                        {...form.register('github')} 
                         placeholder="username"
                       />
                     </div>
@@ -363,7 +471,7 @@ export default function ProfileSettingsPage() {
                       </label>
                       <Input 
                         id="linkedin" 
-                        {...register('linkedin')} 
+                        {...form.register('linkedin')} 
                         placeholder="username"
                       />
                     </div>
@@ -375,9 +483,9 @@ export default function ProfileSettingsPage() {
                 <Button
                   type="submit"
                   variant="pixel"
-                  disabled={isUpdating}
+                  disabled={isUpdating || isUploadingProfile || isUploadingBanner}
                 >
-                  {isUpdating ? (
+                  {isUpdating || isUploadingProfile || isUploadingBanner ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Saving changes...
@@ -408,29 +516,19 @@ export default function ProfileSettingsPage() {
                             alt="Profile preview" 
                             fill 
                             className="object-cover"
-                            {...(user.bannerImage.startsWith('data:') ? {
+                            {...(profileImagePreview.startsWith('data:') ? {
                               placeholder: "blur",
                               blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
                             } : {})}
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
                           />
-                        ) : user.image ? (
-                          <Image 
-                            src={user.image} 
-                            alt={user.name} 
-                            fill 
-                            className="object-cover"
-                            {...(user.bannerImage.startsWith('data:') ? {
-                              placeholder: "blur",
-                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                            } : {})}
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          />
                         ) : (
-                          <User className="h-full w-full p-4 text-muted-foreground" />
+                          <div className="h-full w-full flex items-center justify-center">
+                            <User className="h-16 w-16 text-muted-foreground" />
+                          </div>
                         )}
                         
-                        {(profileImagePreview || user.image) && (
+                        {profileImagePreview && (
                           <button 
                             type="button"
                             onClick={clearProfileImage}
@@ -447,9 +545,19 @@ export default function ProfileSettingsPage() {
                           variant="outline" 
                           size="sm"
                           onClick={() => profileImageInputRef.current?.click()}
+                          disabled={isUploadingProfile}
                         >
-                          <Upload className="h-4 w-4 mr-1" />
-                          Change image
+                          {isUploadingProfile ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 mr-1" />
+                              Change image
+                            </>
+                          )}
                         </Button>
                         <input 
                           type="file" 
@@ -479,19 +587,11 @@ export default function ProfileSettingsPage() {
                             alt="Banner preview" 
                             fill 
                             className="object-cover"
-                            placeholder="blur"
-                            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            {...(bannerImagePreview.startsWith('data:') ? {
+                              placeholder: "blur",
+                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                            } : {})}
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-                          />
-                        ) : user.bannerImage ? (
-                          <Image 
-                            src={user.bannerImage} 
-                            alt="Banner" 
-                            fill 
-                            className="object-cover"
-                            placeholder="blur"
-                            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           />
                         ) : (
                           <div className="h-full w-full flex items-center justify-center">
@@ -499,7 +599,7 @@ export default function ProfileSettingsPage() {
                           </div>
                         )}
                         
-                        {(bannerImagePreview || user.bannerImage) && (
+                        {bannerImagePreview && (
                           <button 
                             type="button"
                             onClick={clearBannerImage}
@@ -516,9 +616,19 @@ export default function ProfileSettingsPage() {
                           variant="outline" 
                           size="sm"
                           onClick={() => bannerImageInputRef.current?.click()}
+                          disabled={isUploadingBanner}
                         >
-                          <Upload className="h-4 w-4 mr-1" />
-                          Change banner
+                          {isUploadingBanner ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 mr-1" />
+                              Change banner
+                            </>
+                          )}
                         </Button>
                         <input 
                           type="file" 
@@ -541,10 +651,10 @@ export default function ProfileSettingsPage() {
               <Button
                 type="button"
                 variant="pixel"
-                onClick={handleSubmit(onSubmit)}
-                disabled={isUpdating}
+                onClick={form.handleSubmit(onSubmit)}
+                disabled={isUpdating || isUploadingProfile || isUploadingBanner}
               >
-                {isUpdating ? (
+                {isUpdating || isUploadingProfile || isUploadingBanner ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving changes...

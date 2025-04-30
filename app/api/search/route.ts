@@ -7,8 +7,10 @@ const searchQuerySchema = z.object({
   q: z.string().optional(),
   type: z.enum(['assets', 'projects', 'users', 'all']).optional().default('all'),
   tag: z.string().optional(),
+  assetType: z.string().optional(),
   page: z.string().optional().transform(val => (val ? parseInt(val) : 1)),
   limit: z.string().optional().transform(val => (val ? parseInt(val) : 10)),
+  sort: z.enum(['latest', 'oldest', 'popular']).optional().default('latest'),
 });
 
 // GET /api/search - Search for assets, projects, or users
@@ -27,14 +29,7 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const { q, type, tag, page, limit } = validatedParams.data;
-    
-    if (!q && !tag) {
-      return NextResponse.json(
-        { error: 'Search query or tag is required' },
-        { status: 400 }
-      );
-    }
+    const { q, type, tag, assetType, page, limit, sort } = validatedParams.data;
     
     const results: any = {
       pagination: {
@@ -62,13 +57,35 @@ export async function GET(req: NextRequest) {
         assetsWhere.tags = { has: tag };
       }
       
+      if (assetType) {
+        assetsWhere.fileType = assetType;
+      }
+      
+      // Determine sort order for assets
+      let assetsOrderBy: any = {};
+      switch (sort) {
+        case 'latest':
+          assetsOrderBy = { createdAt: 'desc' };
+          break;
+        case 'oldest':
+          assetsOrderBy = { createdAt: 'asc' };
+          break;
+        case 'popular':
+          assetsOrderBy = { 
+            likes: { _count: 'desc' } 
+          };
+          break;
+        default:
+          assetsOrderBy = { createdAt: 'desc' };
+      }
+      
       const assetsCount = await prisma.asset.count({ where: assetsWhere });
       
       const assets = await prisma.asset.findMany({
         where: assetsWhere,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: assetsOrderBy,
         include: {
           user: {
             select: {
@@ -76,6 +93,12 @@ export async function GET(req: NextRequest) {
               name: true,
               username: true,
               image: true,
+            },
+          },
+          project: {
+            select: {
+              id: true,
+              title: true,
             },
           },
           _count: {
@@ -87,7 +110,7 @@ export async function GET(req: NextRequest) {
         },
       });
       
-      results.assets = assets.map((asset: { _count: { likes: any; comments: any; }; }) => ({
+      results.assets = assets.map((asset) => ({
         ...asset,
         likes: asset._count.likes,
         comments: asset._count.comments,
@@ -98,68 +121,7 @@ export async function GET(req: NextRequest) {
       results.pagination.totalPages = Math.ceil(assetsCount / limit);
     }
     
-    // Search projects
-    if (type === 'all' || type === 'projects') {
-      const projectsWhere: any = {
-        isPublic: true,
-      };
-      
-      if (q) {
-        projectsWhere.OR = [
-          { title: { contains: q, mode: 'insensitive' } },
-          { description: { contains: q, mode: 'insensitive' } },
-        ];
-      }
-      
-      // For projects, we search for those with assets that have the specified tag
-      if (tag) {
-        projectsWhere.assets = {
-          some: {
-            tags: { has: tag },
-          },
-        };
-      }
-      
-      const projectsCount = await prisma.project.count({ where: projectsWhere });
-      
-      const projects = await prisma.project.findMany({
-        where: projectsWhere,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              image: true,
-            },
-          },
-          _count: {
-            select: {
-              assets: true,
-              likes: true,
-            },
-          },
-        },
-      });
-      
-      results.projects = projects.map((project: { _count: { assets: any; likes: any; }; }) => ({
-        ...project,
-        assetCount: project._count.assets,
-        likes: project._count.likes,
-        _count: undefined,
-      }));
-      
-      results.pagination.totalCount += projectsCount;
-      results.pagination.totalPages = Math.max(
-        results.pagination.totalPages,
-        Math.ceil(projectsCount / limit)
-      );
-    }
-    
-    // Search users
+    // Search users (creators)
     if (type === 'all' || type === 'users') {
       const usersWhere: any = {};
       
@@ -202,19 +164,105 @@ export async function GET(req: NextRequest) {
         },
       });
       
-      results.users = users.map((user: { _count: { assets: any; followers: any; following: any; }; }) => ({
+      results.users = users.map((user) => ({
         ...user,
         assetCount: user._count.assets,
         followerCount: user._count.followers,
         followingCount: user._count.following,
+        stats: {
+          assets: user._count.assets,
+          followers: user._count.followers,
+          following: user._count.following,
+        },
         _count: undefined,
       }));
       
-      results.pagination.totalCount += usersCount;
-      results.pagination.totalPages = Math.max(
-        results.pagination.totalPages,
-        Math.ceil(usersCount / limit)
-      );
+      if (type === 'users') {
+        results.pagination.totalCount = usersCount;
+        results.pagination.totalPages = Math.ceil(usersCount / limit);
+      } else if (type === 'all') {
+        results.pagination.totalCount += usersCount;
+      }
+    }
+    
+    // Search projects
+    if (type === 'all' || type === 'projects') {
+      const projectsWhere: any = {
+        isPublic: true,
+      };
+      
+      if (q) {
+        projectsWhere.OR = [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+      
+      // For projects, we search for those with assets that have the specified tag
+      if (tag) {
+        projectsWhere.assets = {
+          some: {
+            tags: { has: tag },
+          },
+        };
+      }
+      
+      // Determine sort order for projects
+      let projectsOrderBy: any = {};
+      switch (sort) {
+        case 'latest':
+          projectsOrderBy = { createdAt: 'desc' };
+          break;
+        case 'oldest':
+          projectsOrderBy = { createdAt: 'asc' };
+          break;
+        case 'popular':
+          projectsOrderBy = { 
+            likes: { _count: 'desc' } 
+          };
+          break;
+        default:
+          projectsOrderBy = { createdAt: 'desc' };
+      }
+      
+      const projectsCount = await prisma.project.count({ where: projectsWhere });
+      
+      const projects = await prisma.project.findMany({
+        where: projectsWhere,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: projectsOrderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          _count: {
+            select: {
+              assets: true,
+              likes: true,
+            },
+          },
+        },
+      });
+      
+      results.projects = projects.map((project) => ({
+        ...project,
+        assetCount: project._count.assets,
+        likes: project._count.likes,
+        _count: undefined,
+      }));
+      
+      if (type === 'projects') {
+        results.pagination.totalCount = projectsCount;
+        results.pagination.totalPages = Math.ceil(projectsCount / limit);
+      } else if (type === 'all') {
+        results.pagination.totalCount += projectsCount;
+      }
     }
     
     // Adjust for type=all
