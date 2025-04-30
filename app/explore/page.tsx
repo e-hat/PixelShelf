@@ -1,6 +1,10 @@
+// app/explore/page.tsx
+
+// TODO: Filter functionality
+
 'use client';
 
-import { useState, useEffect, Suspense, useCallback } from 'react';
+import { useState, useEffect, Suspense, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -35,6 +39,9 @@ export default function ExplorePage() {
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
+  // Use ref to keep track of previous fetch to prevent duplicate calls
+  const lastFetchRef = useRef<string>('');
+  
   // Function to fetch explore data from the API
   const fetchExploreData = useCallback(async (
     tab: 'assets' | 'creators',
@@ -44,6 +51,17 @@ export default function ExplorePage() {
     page: number,
     replace: boolean = true
   ) => {
+    // Create a request signature to check for duplicates
+    const requestSignature = JSON.stringify({ tab, query, tags, type, page });
+    
+    // Check if this is a duplicate fetch request
+    if (requestSignature === lastFetchRef.current) {
+      return; // Skip duplicate fetch
+    }
+    
+    // Update the last fetch reference
+    lastFetchRef.current = requestSignature;
+    
     if (replace) {
       setIsLoading(true);
     } else {
@@ -103,11 +121,33 @@ export default function ExplorePage() {
       setIsLoadingMore(false);
     }
   }, []);
-  
-  // Load initial data
+
   useEffect(() => {
-    fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, 1);
-  }, [activeTab, fetchExploreData]); // Don't include search params in dependency array to avoid reloading on every change
+    fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, 1)
+  }, [])
+  
+  const handleTabChange = useCallback((newTab: "assets" | "creators") => {
+    setActiveTab(newTab);
+  
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('q', searchQuery);
+    if (selectedTags.length) params.set('tag', selectedTags[0]);
+    if (selectedType) params.set('type', selectedType);
+    params.set('tab', newTab);
+  
+    router.push(`/explore?${params.toString()}`);
+  
+    // ← fetch immediately on tab switch
+    fetchExploreData(
+      newTab,
+      searchQuery,
+      selectedTags,
+      selectedType,
+      1,
+      true
+    );
+  }, [ searchQuery, selectedTags, selectedType, router, fetchExploreData ]);
+  
   
   // Helper function to toggle tag selection
   const toggleTag = (tag: string) => {
@@ -308,20 +348,7 @@ export default function ExplorePage() {
           <Tabs 
             defaultValue={activeTab} 
             onValueChange={(value: string) => {
-              const newTab = value as 'assets' | 'creators';
-              setActiveTab(newTab);
-              setPage(1); // Reset pagination when changing tabs
-              
-              // Update URL
-              const params = new URLSearchParams();
-              if (searchQuery)      params.set('q', searchQuery);
-              if (selectedTags[0])  params.set('tag', selectedTags[0]);
-              if (selectedType)     params.set('type', selectedType);
-              params.set('tab', value);
-              router.push(`/explore?${params.toString()}`);
-              
-              // Fetch data for the new tab
-              fetchExploreData(newTab, searchQuery, selectedTags, selectedType, 1);
+              handleTabChange(value as 'assets' | 'creators');
             }}
           >
             <TabsList>
