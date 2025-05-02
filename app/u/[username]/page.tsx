@@ -1,8 +1,7 @@
 // app/u/[username]/page.tsx
-
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, use } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -26,10 +25,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssetCard from '@/components/feature-specific/asset-card';
 import ProjectCard from '@/components/feature-specific/project-card';
 import { formatDate } from '@/lib/utils';
+import { useUserProfileQuery, useFollowUserMutation, useUnfollowUserMutation } from '@/hooks/use-user-profile-query';
+import { useAssetsQuery } from '@/hooks/use-assets-query';
+import { useProjectsQuery } from '@/hooks/use-projects-query';
+import { useCreateChatMutation } from '@/hooks/use-chats-query';
+import { Asset, Project } from '@/types';
+import router from 'next/router';
 import { toast } from 'sonner';
-import { useUserProfile } from '@/hooks/use-user-profile';
-import { useAssets } from '@/hooks/use-assets';
-import { useProjects } from '@/hooks/use-projects';
 
 type Params = Promise<{ username: string }>;
 
@@ -41,36 +43,39 @@ export default function UserProfilePage({ params }: { params: Params }) {
   const [activeTab, setActiveTab] = useState<"assets" | "projects">("assets");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // Use the hooks to fetch user data, assets, and projects
-  const { 
-    profile, 
-    isLoading: isLoadingProfile, 
-    error: profileError, 
-    isFollowing, 
-    followerCount, 
-    followUser, 
-    unfollowUser 
-  } = useUserProfile(username);
-  
-  // Only fetch assets when profile is loaded
-  const { 
-    assets, 
-    isLoading: isLoadingAssets, 
-    error: assetsError 
-  } = useAssets(profile ? { 
-    userId: profile.id, 
-    limit: 12 
-  } : null);
-  
-  // Only fetch projects when profile is loaded
-  const { 
-    projects, 
+  // Fetch user profile
+  const {
+    data: profile,
+    isLoading: isLoadingProfile,
+    error: profileError
+  } = useUserProfileQuery(username);
+
+  // Fetch user assets
+  const {
+    assets,
+    isLoading: isLoadingAssets,
+    error: assetsError
+  } = useAssetsQuery({
+    userId: profile?.id,
+    enabled: !!profile,
+  });
+
+  // Fetch user projects
+  const {
+    projects,
     isLoading: isLoadingProjects,
-    error: projectsError 
-  } = useProjects(profile ? { 
-    username: username, 
-    limit: 6 
-  } : null);
+    error: projectsError
+  } = useProjectsQuery({
+    userId:  profile?.id,
+    enabled: !!profile
+});
+
+  // Follow/unfollow mutations
+  const followMutation = useFollowUserMutation();
+  const unfollowMutation = useUnfollowUserMutation();
+
+  // Create chat mutation
+  const createChatMutation = useCreateChatMutation();
 
   const isOwnProfile = session?.user?.username?.toLowerCase() === username.toLowerCase();
 
@@ -80,14 +85,12 @@ export default function UserProfilePage({ params }: { params: Params }) {
       return;
     }
     
-    try {
-      if (isFollowing) {
-        await unfollowUser();
-      } else {
-        await followUser();
-      }
-    } catch (error) {
-      toast.error('Failed to process your request');
+    if (!profile) return;
+    
+    if (profile.isFollowing) {
+      unfollowMutation.mutate(profile.id);
+    } else {
+      followMutation.mutate(profile.id);
     }
   };
 
@@ -99,15 +102,11 @@ export default function UserProfilePage({ params }: { params: Params }) {
     
     if (!profile) return;
     
-    try {
-      // In a real implementation, call the API to create a chat
-      // await api.chats.create(profile.id);
-      toast.success(`Started a chat with ${profile.name}`);
-      // Navigate to chat
-      // router.push(`/chat?with=${profile.id}`);
-    } catch (error) {
-      toast.error('Failed to start conversation');
-    }
+    createChatMutation.mutate(profile.id, {
+      onSuccess: (newChat) => {
+        router.push(`/chat?with=${profile.id}`);
+      }
+    });
   };
 
   // Loading state
@@ -125,7 +124,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
       <div className="min-h-screen flex flex-col items-center justify-center">
         <h1 className="text-2xl font-bold mb-4">User not found</h1>
         <p className="text-muted-foreground mb-8">
-          {profileError || "The user you're looking for doesn't exist or couldn't be loaded."}
+          {profileError instanceof Error ? profileError.message : "The user you're looking for doesn't exist or couldn't be loaded."}
         </p>
         <Button asChild variant="outline">
           <Link href="/">Return Home</Link>
@@ -145,10 +144,6 @@ export default function UserProfilePage({ params }: { params: Params }) {
             fill
             className="object-cover"
             priority
-            {...(profile.bannerImage.startsWith('data:') ? {
-              placeholder: "blur",
-              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-            } : {})}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         )}
@@ -209,12 +204,17 @@ export default function UserProfilePage({ params }: { params: Params }) {
               {!isOwnProfile ? (
                 <div className="flex space-x-2 mt-2 md:mt-0">
                   <Button
-                    variant={isFollowing ? "outline" : "pixel"}
+                    variant={profile.isFollowing ? "outline" : "pixel"}
                     onClick={handleFollow}
+                    disabled={followMutation.isPending || unfollowMutation.isPending}
                   >
-                    {isFollowing ? "Following" : "Follow"}
+                    {profile.isFollowing ? "Following" : "Follow"}
                   </Button>
-                  <Button variant="outline" onClick={handleMessage}>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleMessage}
+                    disabled={createChatMutation.isPending}
+                  >
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Message
                   </Button>
@@ -286,7 +286,7 @@ export default function UserProfilePage({ params }: { params: Params }) {
               <div className="flex items-center space-x-4">
                 <div className="flex items-center">
                   <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                  <span className="font-semibold mr-1">{followerCount}</span>
+                  <span className="font-semibold mr-1">{profile.stats.followers}</span>
                   <span className="text-muted-foreground text-sm">
                     Followers
                   </span>
@@ -340,14 +340,14 @@ export default function UserProfilePage({ params }: { params: Params }) {
               </div>
             ) : assetsError ? (
               <div className="py-12 text-center">
-                <p className="text-muted-foreground">{assetsError}</p>
+                <p className="text-muted-foreground">{assetsError instanceof Error ? assetsError.message : 'Failed to load assets'}</p>
                 <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
                   Retry
                 </Button>
               </div>
             ) : assets.length > 0 ? (
               <div className="grid-masonry">
-                {assets.map((asset) => (
+                {assets.map((asset: Asset) => (
                   <AssetCard key={asset.id} asset={asset} />
                 ))}
               </div>
@@ -372,14 +372,14 @@ export default function UserProfilePage({ params }: { params: Params }) {
               </div>
             ) : projectsError ? (
               <div className="py-12 text-center">
-                <p className="text-muted-foreground">{projectsError}</p>
+                <p className="text-muted-foreground">{projectsError instanceof Error ? projectsError.message : 'Failed to load projects'}</p>
                 <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
                   Retry
                 </Button>
               </div>
             ) : projects.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((project) => (
+                {projects.map((project: Project) => (
                   <ProjectCard
                     key={project.id}
                     project={{

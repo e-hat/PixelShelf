@@ -1,25 +1,23 @@
 // app/explore/page.tsx
 
-// TODO: Filter functionality
-
 'use client';
 
-import { useState, useEffect, Suspense, useCallback, useRef } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, Filter, GridIcon, LayoutList, User, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, Filter, GridIcon, LayoutList, X, User, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssetCard from '@/components/feature-specific/asset-card';
 import { cn } from '@/lib/utils';
-import { Asset } from '@/types';
-import { api, ApiError } from '@/lib/api/api-client';
 import { POPULAR_TAGS } from '@/constants';
+import { useInfiniteSearchQuery, useSearchQuery } from '@/hooks/use-search-query';
 
 // Search parameters component that uses useSearchParams
 import { ExploreSearchParams } from './search-params';
+import { Asset, UserProfile } from '@/types';
 
 export default function ExplorePage() {
   const router = useRouter();
@@ -30,105 +28,37 @@ export default function ExplorePage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   
-  // State for API data
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [creators, setCreators] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  
-  // Use ref to keep track of previous fetch to prevent duplicate calls
-  const lastFetchRef = useRef<string>('');
-  
-  // Function to fetch explore data from the API
-  const fetchExploreData = useCallback(async (
-    tab: 'assets' | 'creators',
-    query: string,
-    tags: string[],
-    type: string | null,
-    page: number,
-    replace: boolean = true
-  ) => {
-    // Create a request signature to check for duplicates
-    const requestSignature = JSON.stringify({ tab, query, tags, type, page });
-    
-    // Check if this is a duplicate fetch request
-    if (requestSignature === lastFetchRef.current) {
-      return; // Skip duplicate fetch
-    }
-    
-    // Update the last fetch reference
-    lastFetchRef.current = requestSignature;
-    
-    if (replace) {
-      setIsLoading(true);
-    } else {
-      setIsLoadingMore(true);
-    }
-    
-    setError(null);
-    
-    try {
-      // Use search API to get data
-      const searchParams: Record<string, any> = {
-        q: query,
-        type: tab === 'assets' ? 'assets' : 'users',
-        page,
-        limit: 12,
-      };
-      
-      // Add tag filter if selected
-      if (tags.length > 0) {
-        searchParams.tag = tags[0]; // Currently just using the first tag
-      }
-      
-      // Add asset type filter if selected (only for assets)
-      if (tab === 'assets' && type) {
-        searchParams.assetType = type;
-      }
-      
-      const response = await api.search.query(searchParams);
-      
-      if (tab === 'assets') {
-        // Update assets list
-        if (replace) {
-          setAssets(response.assets || []);
-        } else {
-          setAssets(prev => [...prev, ...(response.assets || [])]);
-        }
-        
-        // Update pagination info
-        setHasMore(page < (response.pagination?.totalPages || 1));
-      } else {
-        // Update creators list
-        if (replace) {
-          setCreators(response.users || []);
-        } else {
-          setCreators(prev => [...prev, ...(response.users || [])]);
-        }
-        
-        // Update pagination info
-        setHasMore(page < (response.pagination?.totalPages || 1));
-      }
-      
-    } catch (err) {
-      console.error('Error fetching explore data:', err);
-      setError(err instanceof ApiError ? err.message : 'Failed to load data');
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, []);
+  // Use the infinite search query hook for data fetching
+  const {
+    results,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage
+  } = useInfiniteSearchQuery({
+    q: searchQuery,
+    type: activeTab === 'assets' ? 'assets' : 'users',
+    tag: selectedTags.length > 0 ? selectedTags[0] : undefined,
+    assetType: activeTab === 'assets' ? selectedType || undefined : undefined,
+    limit: 12,
+    enabled: false // Manually trigger this when needed
+  });
 
+  // Extract data from results
+  const assets = results?.assets || [];
+  const creators = results?.users || [];
+  const hasMore = results?.hasMore || false;
+  const isLoadingMore = results?.isLoadingMore || false;
+  
+  // Initial data fetch
   useEffect(() => {
-    fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, 1)
-  }, [])
+    refetch();
+  }, [activeTab, searchQuery, selectedTags, selectedType, refetch]);
   
-  const handleTabChange = useCallback((newTab: "assets" | "creators") => {
-    setActiveTab(newTab);
-  
+  const handleTabChange = useCallback((newTab: "assets" | "creators") => {  
     const params = new URLSearchParams();
     if (searchQuery) params.set('q', searchQuery);
     if (selectedTags.length) params.set('tag', selectedTags[0]);
@@ -136,18 +66,9 @@ export default function ExplorePage() {
     params.set('tab', newTab);
   
     router.push(`/explore?${params.toString()}`);
-  
-    // ← fetch immediately on tab switch
-    fetchExploreData(
-      newTab,
-      searchQuery,
-      selectedTags,
-      selectedType,
-      1,
-      true
-    );
-  }, [ searchQuery, selectedTags, selectedType, router, fetchExploreData ]);
-  
+
+    setActiveTab(newTab);
+  }, [searchQuery, selectedTags, selectedType, router]);
   
   // Helper function to toggle tag selection
   const toggleTag = (tag: string) => {
@@ -170,7 +91,7 @@ export default function ExplorePage() {
     router.push(`/explore?${params.toString()}`);
     
     // Reload data with cleared filters
-    fetchExploreData(activeTab, '', [], null, 1);
+    refetch();
   };
   
   // Handle form submission
@@ -187,15 +108,13 @@ export default function ExplorePage() {
     router.push(`/explore?${params.toString()}`);
     
     // Fetch data with new search params
-    fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, 1);
+    refetch();
   };
   
   // Load more items
   const loadMore = () => {
     if (!isLoadingMore && hasMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, nextPage, false);
+      fetchNextPage();
     }
   };
 
@@ -217,13 +136,14 @@ export default function ExplorePage() {
             setSelectedType={setSelectedType}
             setActiveTab={setActiveTab as any}
             applyFilters={(query, tags, type, tab) => {
-              fetchExploreData(
-                tab === 'creators' ? 'creators' : 'assets', 
-                query, 
-                tags, 
-                type, 
-                1
-              );
+              // Update the state
+              setSearchQuery(query);
+              setSelectedTags(tags);
+              setSelectedType(type);
+              if (tab) setActiveTab(tab);
+              
+              // Trigger the refetch
+              refetch();
             }}
           />
         </Suspense>
@@ -383,14 +303,16 @@ export default function ExplorePage() {
         )}
         
         {/* Error state */}
-        {!isLoading && error && (
+        {!isLoading && isError && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <AlertCircle className="h-12 w-12 text-destructive mb-4" />
             <h3 className="text-lg font-medium mb-2">Failed to load data</h3>
-            <p className="text-muted-foreground mb-4">{error}</p>
+            <p className="text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : 'An error occurred while fetching data'}
+            </p>
             <Button 
               variant="outline" 
-              onClick={() => fetchExploreData(activeTab, searchQuery, selectedTags, selectedType, 1)}
+              onClick={() => refetch()}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Try Again
@@ -399,13 +321,13 @@ export default function ExplorePage() {
         )}
         
         {/* Content */}
-        {!isLoading && !error && (
+        {!isLoading && !isError && (
           <div>
             {activeTab === 'assets' ? (
               <>
                 {assets.length > 0 ? (
                   <div className={viewMode === 'grid' ? 'grid-masonry' : 'space-y-4'}>
-                    {assets.map((asset) => (
+                    {assets.map((asset: Asset) => (
                       <AssetCard 
                         key={asset.id} 
                         asset={asset} 
@@ -430,7 +352,7 @@ export default function ExplorePage() {
               <>
                 {creators.length > 0 ? (
                   <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-                    {creators.map((creator) => (
+                    {creators.map((creator: UserProfile) => (
                       <Link 
                         key={creator.id} 
                         href={`/u/${creator.username}`}
@@ -460,8 +382,8 @@ export default function ExplorePage() {
                             <p className="text-sm text-muted-foreground mb-3">@{creator.username}</p>
                             <p className="text-sm mb-4 line-clamp-2">{creator.bio || 'No bio provided.'}</p>
                             <div className="flex justify-center space-x-4 text-sm text-muted-foreground">
-                              <span>{creator.followerCount || creator.stats?.followers || 0} followers</span>
-                              <span>{creator.assetCount || creator.stats?.assets || 0} assets</span>
+                              <span>{creator.stats?.followers || 0} followers</span>
+                              <span>{creator.stats?.assets || 0} assets</span>
                             </div>
                           </div>
                         ) : (
@@ -487,8 +409,8 @@ export default function ExplorePage() {
                               <p className="text-sm text-muted-foreground line-clamp-1">{creator.bio || 'No bio provided.'}</p>
                             </div>
                             <div className="flex-shrink-0 ml-4 text-sm text-muted-foreground">
-                              <div>{creator.followerCount || creator.stats?.followers || 0} followers</div>
-                              <div>{creator.assetCount || creator.stats?.assets || 0} assets</div>
+                              <div>{creator.stats?.followers || 0} followers</div>
+                              <div>{creator.stats?.assets || 0} assets</div>
                             </div>
                           </>
                         )}
@@ -516,9 +438,9 @@ export default function ExplorePage() {
                 <Button
                   variant="outline"
                   onClick={loadMore}
-                  disabled={isLoadingMore}
+                  disabled={isFetchingNextPage}
                 >
-                  {isLoadingMore ? (
+                  {isFetchingNextPage ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Loading...

@@ -9,20 +9,23 @@ import { getRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Asset } from '@/types';
 import { useSession } from 'next-auth/react';
-import { api } from '@/lib/api/api-client';
 import { toast } from 'sonner';
+import { useAssetLikeToggle } from '@/hooks/use-likes-query';
 
 interface AssetCardProps {
   asset: Asset;
   variant?: 'horizontal' | 'vertical';
 }
 
-
 export default function AssetCard({ asset }: AssetCardProps) {
   const { data: session } = useSession();
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(asset.likes ?? 0);
-  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Use the optimistic UI approach for likes - start with the initial state from the asset
+  const [isLiked, setIsLiked] = useState(asset.likedByUser || false);
+  const [likeCount, setLikeCount] = useState(asset.likes || 0);
+  
+  // Use the asset like toggle hook
+  const { toggleLike, isLoading: isLikeLoading } = useAssetLikeToggle();
 
   const handleLike = async () => {
     if (!session) {
@@ -30,26 +33,14 @@ export default function AssetCard({ asset }: AssetCardProps) {
       return;
     }
     
-    setIsUpdating(true);
+    if (isLikeLoading) return;
     
-    try {
-      if (liked) {
-        // Unlike the asset
-        await api.likes.unlikeAsset(asset.id);
-        setLikeCount(prev => prev - 1);
-        setLiked(false);
-      } else {
-        // Like the asset
-        await api.likes.likeAsset(asset.id);
-        setLikeCount(prev => prev + 1);
-        setLiked(true);
-      }
-    } catch (error) {
-      console.error('Error updating like:', error);
-      toast.error('Failed to update like');
-    } finally {
-      setIsUpdating(false);
-    }
+    // Optimistically update UI
+    setIsLiked(!isLiked);
+    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+    
+    // Call the mutation
+    toggleLike(asset.id, isLiked);
   };
 
   // Determine what to render based on the asset type
@@ -139,7 +130,7 @@ export default function AssetCard({ asset }: AssetCardProps) {
           )}
         </div>
         <div className="flex items-center space-x-2">
-          <Link href={`/u/${asset.user.name}`} className="flex items-center">
+          <Link href={`/u/${asset.user.username}`} className="flex items-center">
             <div className="relative h-6 w-6 rounded-full overflow-hidden mr-2">
             {asset.user.image ? (
               <Image
@@ -156,7 +147,7 @@ export default function AssetCard({ asset }: AssetCardProps) {
             )}
             </div>
             <span className="text-sm font-medium hover:text-pixelshelf-primary">
-              {asset.user.name}
+              {asset.user.name || asset.user.username}
             </span>
           </Link>
           <span className="text-xs text-muted-foreground">
@@ -169,8 +160,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
           <button 
             onClick={handleLike}
             className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"
+            disabled={isLikeLoading}
           >
-            <Heart className={`h-4 w-4 ${liked ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
+            <Heart className={`h-4 w-4 ${isLiked ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
             <span>{likeCount}</span>
           </button>
           <Link 

@@ -1,20 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import AssetCard from '@/components/feature-specific/asset-card';
 import { Skeleton } from '@/components/ui/skeleton-loader';
-import { 
-  Loader2, 
-  RefreshCw, 
-  TrendingUp, 
-  UserCheck, 
-  AlertCircle
+import {
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  UserCheck,
+  AlertCircle,
 } from 'lucide-react';
-import { useAssets } from '@/hooks/use-assets';
+import { useAssetsQuery } from '@/hooks/use-assets-query';
 import { PAGINATION } from '@/constants';
 import { Asset } from '@/types';
 import { cn } from '@/lib/utils';
@@ -24,12 +24,15 @@ interface DashboardFeedProps {
   className?: string;
 }
 
-export function DashboardFeed({ initialTab = 'trending', className }: DashboardFeedProps) {
+export function DashboardFeed({
+  initialTab = 'trending',
+  className,
+}: DashboardFeedProps) {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<'trending' | 'following'>(initialTab);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Get trending assets
+
+  // Trending feed (infinite)
   const {
     assets: trendingAssets,
     isLoading: isTrendingLoading,
@@ -37,37 +40,35 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
     hasMore: trendingHasMore,
     isLoadingMore: isTrendingLoadingMore,
     loadMore: loadMoreTrending,
-    reload: reloadTrending,
-  } = useAssets({
+    refetch: reloadTrending,
+  } = useAssetsQuery({
     sort: 'popular',
     limit: PAGINATION.DEFAULT_LIMIT,
   });
-  
-  // Get following assets (assets from users the current user follows)
+
+  // Following feed (infinite, only after sign-in)
   const {
     assets: followingAssets,
     isLoading: isFollowingLoading,
     error: followingError,
     hasMore: followingHasMore,
-    isLoadingMore: followingLoadingMore,
+    isLoadingMore: isFollowingLoadingMore,
     loadMore: loadMoreFollowing,
-    reload: reloadFollowing,
-  } = useAssets({
-    // In a real app, this would be a special API endpoint or query param
-    // For MVP, we're using the same endpoint but will filter client-side
+    refetch: reloadFollowing,
+  } = useAssetsQuery({
     sort: 'latest',
     limit: PAGINATION.DEFAULT_LIMIT,
+    enabled: !!session,
   });
-  
-  // Function to handle tab change
+
+  // Tab switch handler
   const handleTabChange = (tab: string) => {
     setActiveTab(tab as 'trending' | 'following');
   };
-  
-  // Function to refresh the current feed
+
+  // Pull-to-refresh
   const refreshFeed = async () => {
     setIsRefreshing(true);
-    
     try {
       if (activeTab === 'trending') {
         await reloadTrending();
@@ -75,12 +76,11 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
         await reloadFollowing();
       }
     } finally {
-      // Add a small delay to make the refresh button animation more visible
       setTimeout(() => setIsRefreshing(false), 500);
     }
   };
-  
-  // Function to load more items
+
+  // Load more pages
   const loadMore = () => {
     if (activeTab === 'trending') {
       loadMoreTrending();
@@ -88,33 +88,29 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
       loadMoreFollowing();
     }
   };
-  
-  // Get the assets, loading state, error and hasMore for the current tab
+
+  // Choose the right data for the active tab
   const currentAssets = activeTab === 'trending' ? trendingAssets : followingAssets;
   const isLoading = activeTab === 'trending' ? isTrendingLoading : isFollowingLoading;
   const error = activeTab === 'trending' ? trendingError : followingError;
   const hasMore = activeTab === 'trending' ? trendingHasMore : followingHasMore;
-  const isLoadingMore = activeTab === 'trending' ? isTrendingLoadingMore : followingLoadingMore;
-  
-  // Filter following assets to simulate "following feed"
-  // In a real app, this would be done on the server side
-  const filteredFollowingAssets = followingAssets.slice(0, 3);
-  
-  return (
-    <div className={cn("space-y-6", className)}>
-      <Tabs 
-        defaultValue={activeTab} 
-        onValueChange={handleTabChange}
-      >
-        <div className="flex justify-between items-center">
+  const isLoadingMore =
+    activeTab === 'trending' ? isTrendingLoadingMore : isFollowingLoadingMore;
 
+  // Simulate “following” filter client-side (MVP)
+  const filteredFollowingAssets = followingAssets.slice(0, 3);
+
+  return (
+    <div className={cn('space-y-6', className)}>
+      <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
+        <div className="flex justify-between items-center">
           <TabsList>
             <TabsTrigger value="trending" className="flex items-center">
               <TrendingUp className="mr-2 h-4 w-4" />
               Trending
             </TabsTrigger>
-            <TabsTrigger 
-              value="following" 
+            <TabsTrigger
+              value="following"
               className="flex items-center"
               disabled={!session}
             >
@@ -122,53 +118,54 @@ export function DashboardFeed({ initialTab = 'trending', className }: DashboardF
               Following
             </TabsTrigger>
           </TabsList>
-        
-          <Button 
-            variant="outline" 
-            size="sm" 
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={refreshFeed}
             disabled={isLoading || isRefreshing}
           >
-            <RefreshCw className={cn(
-              "h-4 w-4 mr-2",
-              isRefreshing && "animate-spin"
-            )} />
+            <RefreshCw
+              className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')}
+            />
             Refresh
           </Button>
         </div>
-        
+
+        {/* Trending Tab Content */}
         <TabsContent value="trending" className="space-y-6 mt-6">
-          {isLoading ? (
+          {isTrendingLoading ? (
             <LoadingState />
-          ) : error ? (
-            <ErrorState error={error} onRetry={reloadTrending} />
+          ) : trendingError ? (
+            <ErrorState error={trendingError.message} onRetry={reloadTrending} />
           ) : trendingAssets.length === 0 ? (
             <EmptyState message="No trending assets found." />
           ) : (
-            <AssetGrid 
-              assets={trendingAssets} 
-              hasMore={hasMore} 
-              isLoadingMore={isLoadingMore} 
-              onLoadMore={loadMore} 
+            <AssetGrid
+              assets={trendingAssets}
+              hasMore={trendingHasMore}
+              isLoadingMore={isTrendingLoadingMore}
+              onLoadMore={loadMore}
             />
           )}
         </TabsContent>
-        
+
+        {/* Following Tab Content */}
         <TabsContent value="following" className="space-y-6 mt-6">
           {!session ? (
             <SignInPrompt />
-          ) : isLoading ? (
+          ) : isFollowingLoading ? (
             <LoadingState />
-          ) : error ? (
-            <ErrorState error={error} onRetry={reloadFollowing} />
+          ) : followingError ? (
+            <ErrorState error={followingError.message} onRetry={reloadFollowing} />
           ) : filteredFollowingAssets.length === 0 ? (
             <EmptyFollowingState />
           ) : (
-            <AssetGrid 
-              assets={filteredFollowingAssets} 
-              hasMore={hasMore} 
-              isLoadingMore={isLoadingMore} 
-              onLoadMore={loadMore} 
+            <AssetGrid
+              assets={filteredFollowingAssets}
+              hasMore={followingHasMore}
+              isLoadingMore={isFollowingLoadingMore}
+              onLoadMore={loadMore}
             />
           )}
         </TabsContent>

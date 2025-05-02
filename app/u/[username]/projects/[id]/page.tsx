@@ -1,8 +1,7 @@
 // app/u/[username]/projects/[id]/page.tsx
-
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, use } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -27,8 +26,10 @@ import { Card } from '@/components/ui/card';
 import AssetCard from '@/components/feature-specific/asset-card';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
-import { api, ApiError } from '@/lib/api/api-client';
-import { Project, Asset } from '@/types';
+import { useProjectQuery} from '@/hooks/use-projects-query';
+import { useAssetsQuery } from '@/hooks/use-assets-query';
+import { useProjectLikeToggle } from '@/hooks/use-likes-query';
+import { Asset } from '@/types';
 
 type Params = Promise<{ username: string; id: string }>;
 
@@ -38,41 +39,26 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
 
   const { data: session } = useSession();
   const router = useRouter();
-  const [project, setProject] = useState<Project | null>(null);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Fetch project data
-  useEffect(() => {
-    async function fetchProjectData() {
-      setIsLoading(true);
-      try {
-        const projectData = await api.projects.getById(id);
-        setProject(projectData);
-        setLikeCount(projectData.likes || 0);
-        setLiked(projectData.likedByUser || false);
-        
-        // Assets should already be included in the project data
-        // But if not, you could fetch them separately
-        if (projectData.assets) {
-          setAssets(projectData.assets);
-        }
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching project:', err);
-        setError(err instanceof ApiError ? err.message : 'Failed to load project');
-      } finally {
-        setIsLoading(false);
-      }
-    }
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+    error: projectError
+  } = useProjectQuery(id);
 
-    fetchProjectData();
-  }, [id]);
+  // Fetch assets for this project
+  const {
+    assets,
+    isLoading: isAssetsLoading
+  } = useAssetsQuery({
+    projectId: id,
+    enabled: !!project
+  });
+
+  // Like/unlike mutations
+  const { toggleLike, isLoading: isLikeLoading } = useProjectLikeToggle();
 
   const isOwner = session?.user?.username === username;
 
@@ -82,20 +68,9 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
       return;
     }
     
-    try {
-      if (liked) {
-        await api.likes.unlikeProject(id);
-      } else {
-        await api.likes.likeProject(id);
-      }
-      
-      setLikeCount(prev => liked ? prev - 1 : prev + 1);
-      setLiked(!liked);
-      toast.success(liked ? "Removed like" : "Added like");
-    } catch (error) {
-      console.error('Error liking/unliking project:', error);
-      toast.error('Failed to process your request');
-    }
+    if (!project) return;
+    
+    toggleLike(project.id, project.likedByUser || false);
   };
 
   const handleShare = () => {
@@ -104,7 +79,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
   };
   
   // Loading state
-  if (isLoading) {
+  if (isProjectLoading) {
     return (
       <div className="container mx-auto px-4 py-12 flex items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
@@ -113,12 +88,12 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
   }
   
   // Error state
-  if (error || !project) {
+  if (projectError || !project) {
     return (
       <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center text-center">
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-2xl font-bold mb-2">Project not found</h2>
-        <p className="text-muted-foreground mb-6">{error || 'The project you are looking for could not be found'}</p>
+        <p className="text-muted-foreground mb-6">{projectError instanceof Error ? projectError.message : 'The project you are looking for could not be found'}</p>
         <Button variant="outline" onClick={() => router.push('/')}>Return to Home</Button>
       </div>
     );
@@ -151,13 +126,14 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
             </Link>
           )}
           <Button
-            variant={liked ? "default" : "outline"}
+            variant={project.likedByUser ? "default" : "outline"}
             size="sm"
             onClick={handleLike}
-            className={liked ? "bg-pixelshelf-primary hover:bg-pixelshelf-primary/90" : ""}
+            disabled={isLikeLoading}
+            className={project.likedByUser ? "bg-pixelshelf-primary hover:bg-pixelshelf-primary/90" : ""}
           >
-            <Heart className={`h-4 w-4 mr-2 ${liked ? "fill-white" : ""}`} />
-            {likeCount}
+            <Heart className={`h-4 w-4 mr-2 ${project.likedByUser ? "fill-white" : ""}`} />
+            {project.likes}
           </Button>
           <Button variant="outline" size="sm" onClick={handleShare}>
             <Share className="h-4 w-4 mr-2" />
@@ -232,7 +208,7 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
           {/* Info */}
           <Card className="p-4">
             <h3 className="font-medium mb-3">Project Information</h3>
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-sm">
               <div className="flex items-center">
                 <Calendar className="h-4 w-4 mr-2" />
                 Created: {formatDate(project.createdAt)}
@@ -243,11 +219,11 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
               </div>
               <div className="flex items-center">
                 <ImageIcon className="h-4 w-4 mr-2" />
-                {project.assetCount || assets.length} assets
+                {assets.length} assets
               </div>
               <div className="flex items-center">
                 <Heart className="h-4 w-4 mr-2" />
-                {likeCount} likes
+                {project.likes} likes
               </div>
             </div>
           </Card>
@@ -298,13 +274,17 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {assets && assets.length > 0 ? (
+        {isAssetsLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : assets.length > 0 ? (
           <div
             className={
               viewMode === "grid" ? "grid-masonry" : "space-y-4"
             }
           >
-            {assets.map((asset) => (
+            {assets.map((asset: Asset) => (
               <AssetCard
                 key={asset.id}
                 asset={asset}

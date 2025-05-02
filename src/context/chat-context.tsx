@@ -10,9 +10,15 @@ import {
 } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { Chat, Message } from '@/types';
+import { Chat } from '@/types';
 import { useNotificationStore } from '@/store';
-import { api } from '@/lib/api/api-client';
+import { 
+  useChatsQuery, 
+  useChatQuery, 
+  useSendMessageMutation, 
+  useCreateChatMutation, 
+  useMarkChatAsReadMutation 
+} from '@/hooks/use-chats-query';
 
 // Define the Chat context interface
 interface ChatContextType {
@@ -49,110 +55,69 @@ const ChatContext = createContext<ChatContextType>({
 // Provider component
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
   const { data: session } = useSession();
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [isLoadingChats, setIsLoadingChats] = useState(false);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
-  const [messageError, setMessageError] = useState<string | null>(null);
   const setHasNewMessages = useNotificationStore(state => state.setHasNewMessages);
   
-  // Fetch chats
-  const fetchChats = useCallback(async () => {
-    if (!session?.user?.id) return;
-    
-    setIsLoadingChats(true);
-    setChatError(null);
-    
-    try {
-      // Use the API to fetch chats
-      const response = await api.chats.getAll();
-      setChats(response.chats);
-      
-      // Check if there are any unread chats
-      const hasUnread = response.chats.some((chat: Chat) => chat.unreadCount && chat.unreadCount > 0);
-      setHasNewMessages(hasUnread);
-    } catch (error) {
-      console.error('Error fetching chats:', error);
-      setChatError('Failed to load chats');
-      toast.error('Failed to load chat conversations');
-    } finally {
-      setIsLoadingChats(false);
-    }
-  }, [session?.user?.id, setHasNewMessages]);
+  // State for selected chat ID
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   
-  // Fetch messages for a specific chat
-  const fetchMessages = useCallback(async (chatId: string) => {
-    if (!session?.user?.id) return;
-    
-    setIsLoadingMessages(true);
-    setMessageError(null);
-    
-    try {
-      // Use the API to fetch chat details with messages
-      const chatData = await api.chats.getById(chatId);
-      setSelectedChat(chatData);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      setMessageError('Failed to load messages');
-      toast.error('Failed to load messages');
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  }, [session?.user?.id]);
-
-  // Mark a chat as read
-  const markChatAsRead = useCallback(async (chatId: string) => {
-    if (!session?.user?.id) return;
-    
-    try {
-      // Use the API to mark chat as read
-      await api.chats.markAsRead(chatId);
-      
-      // Update the chat in the list
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === chatId 
-            ? { ...chat, unreadCount: 0 } 
-            : chat
-        )
-      );
-      
-      // Check if there are any unread chats left
-      const hasUnread = chats.some(chat => 
-        chat.id !== chatId && chat.unreadCount && chat.unreadCount > 0
-      );
-      
+  // Use React Query hooks
+  const { 
+    data: chatsData,
+    isLoading: isLoadingChats,
+    error: chatsError,
+    refetch: refetchChats
+  } = useChatsQuery({
+    enabled: !!session?.user?.id
+  });
+  
+  const {
+    data: chatData,
+    isLoading: isLoadingMessages,
+    error: chatError
+  } = useChatQuery(selectedChatId || '', {
+    enabled: !!session?.user?.id && !!selectedChatId
+  });
+  
+  const sendMessageMutation = useSendMessageMutation();
+  const createChatMutation = useCreateChatMutation();
+  const markAsReadMutation = useMarkChatAsReadMutation();
+  
+  // Derived state
+  const chats = chatsData?.chats || [];
+  const selectedChat = chatData || null;
+  const chatErrorMessage = chatsError instanceof Error ? chatsError.message : 'Failed to load chats';
+  const messageErrorMessage = chatError instanceof Error ? chatError.message : 'Failed to load messages';
+  
+  // Check for unread messages
+  useEffect(() => {
+    if (chats && chats.length > 0) {
+      const hasUnread = chats.some((chat: { unreadCount: number; }) => chat.unreadCount && chat.unreadCount > 0);
       setHasNewMessages(hasUnread);
-    } catch (error) {
-      console.error('Error marking chat as read:', error);
-      // No need to show toast for this error
     }
-  }, [chats, session?.user?.id, setHasNewMessages]);
+  }, [chats, setHasNewMessages]);
   
   // Select a chat and load its messages
   const selectChat = useCallback((chatId: string) => {
     // Find the chat in the list
-    const chat = chats.find(chat => chat.id === chatId);
+    const chat = chats.find((chat: { id: string; }) => chat.id === chatId);
     
     if (!chat) {
       toast.error('Chat not found');
       return;
     }
     
-    // Load messages for this chat
-    fetchMessages(chatId);
+    // Update selected chat ID
+    setSelectedChatId(chatId);
     
     // Mark chat as read when selected
     if (chat.unreadCount && chat.unreadCount > 0) {
-      markChatAsRead(chatId);
+      markAsReadMutation.mutate(chatId);
     }
-  }, [chats, fetchMessages, markChatAsRead]);
+  }, [chats, markAsReadMutation]);
   
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
-    if (!session?.user?.id || !selectedChat) {
+    if (!session?.user?.id || !selectedChatId) {
       toast.error('You must be signed in and have a chat selected to send messages');
       return;
     }
@@ -161,50 +126,16 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    setIsSendingMessage(true);
-    setMessageError(null);
-    
     try {
-      // Use the API to send a message
-      const newMessage = await api.chats.sendMessage(selectedChat.id, content);
-      
-      // Update the selected chat with the new message
-      const updatedChat = {
-        ...selectedChat,
-        lastMessage: {
-          content,
-          senderId: session.user.id,
-          createdAt: new Date().toISOString(),
-        },
-        messages: [...(selectedChat.messages || []), newMessage],
-      };
-      
-      // Update the selected chat
-      setSelectedChat(updatedChat);
-      
-      // Update the chat in the list
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === selectedChat.id 
-            ? {
-                ...chat,
-                lastMessage: {
-                  content,
-                  senderId: session.user.id,
-                  createdAt: new Date().toISOString(),
-                },
-              } 
-            : chat
-        )
-      );
+      await sendMessageMutation.mutateAsync({ 
+        chatId: selectedChatId, 
+        content 
+      });
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessageError('Failed to send message');
-      toast.error('Failed to send message');
-    } finally {
-      setIsSendingMessage(false);
+      // Error is handled in the mutation
     }
-  }, [selectedChat, session?.user?.id]);
+  }, [selectedChatId, session?.user?.id, sendMessageMutation]);
   
   // Create a new chat with a user
   const createChat = useCallback(async (userId: string) => {
@@ -219,7 +150,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }
     
     // Check if chat already exists
-    const existingChat = chats.find(chat => 
+    const existingChat = chats.find((chat: { participants: any[]; }) => 
       chat.participants.some(p => p.id === userId)
     );
     
@@ -229,46 +160,33 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    setIsLoadingChats(true);
-    setChatError(null);
-    
     try {
-      // Use the API to create a new chat
-      const newChat = await api.chats.create(userId);
-      
-      // Add empty messages array if not included
-      if (!newChat.messages) {
-        newChat.messages = [];
-      }
-      
-      // Add to chat list
-      setChats(prevChats => [newChat, ...prevChats]);
+      const newChat = await createChatMutation.mutateAsync(userId);
       
       // Select the new chat
-      setSelectedChat(newChat);
-      
-      const participantName = newChat.participants?.[0]?.name || newChat.participants?.[0]?.username || 'user';
-      toast.success(`Started a conversation with ${participantName}`);
+      setSelectedChatId(newChat.id);
     } catch (error) {
       console.error('Error creating chat:', error);
-      setChatError('Failed to create chat');
-      toast.error('Failed to start conversation');
-    } finally {
-      setIsLoadingChats(false);
+      // Error is handled in the mutation
     }
-  }, [chats, selectChat, session?.user?.id]);
+  }, [chats, createChatMutation, selectChat, session?.user?.id]);
+  
+  // Mark a chat as read
+  const markChatAsRead = useCallback(async (chatId: string) => {
+    if (!session?.user?.id) return;
+    
+    try {
+      await markAsReadMutation.mutateAsync(chatId);
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+      // Error is handled in the mutation
+    }
+  }, [markAsReadMutation, session?.user?.id]);
   
   // Refresh chats
   const refreshChats = useCallback(async () => {
-    await fetchChats();
-  }, [fetchChats]);
-  
-  // Load chats when session changes
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchChats();
-    }
-  }, [session?.user?.id, fetchChats]);
+    await refetchChats();
+  }, [refetchChats]);
   
   // Provide the context value
   const contextValue: ChatContextType = {
@@ -276,9 +194,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     selectedChat,
     isLoadingChats,
     isLoadingMessages,
-    isSendingMessage,
-    chatError,
-    messageError,
+    isSendingMessage: sendMessageMutation.isPending,
+    chatError: chatsError ? chatErrorMessage : null,
+    messageError: chatError ? messageErrorMessage : null,
     selectChat,
     sendMessage,
     createChat,

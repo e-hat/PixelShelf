@@ -1,12 +1,11 @@
 // app/assets/[id]/page.tsx
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { 
   Heart, 
   MessageSquare, 
@@ -25,65 +24,44 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDate, getRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
-import { api, ApiError } from '@/lib/api/api-client';
-import { Asset, Comment } from '@/types';
+import { 
+  useAssetQuery
+} from '@/hooks/use-assets-query';
+import { 
+  useCommentsQuery, 
+  useCreateCommentMutation 
+} from '@/hooks/use-comments-query';
+import { useAssetLikeToggle } from '@/hooks/use-likes-query';
+import { Comment } from '@/types';
 
 export default function AssetDetailPage() {
   const { id } = useParams();
   const { data: session } = useSession();
   const router = useRouter();
-
-  const [asset, setAsset] = useState<Asset | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [comment, setComment] = useState('');
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch asset and comments
-  useEffect(() => {
-    async function fetchAssetData() {
-      if (!id) return;
-      
-      setIsLoading(true);
-      
-      try {
-        // Fetch asset data
-        const assetData = await api.assets.getById(id as string);
-        
-        setAsset(assetData);
-        setLiked(assetData.likedByUser || false);
-        setLikeCount(assetData.likes || 0);
-        
-        // Comments might be included in the asset data
-        if (assetData.comments) {
-          setComments(assetData.comments);
-        } else {
-          // If not, fetch comments separately
-          try {
-            const commentsData = await api.comments.getForAsset(id as string);
-            setComments(commentsData.comments || []);
-          } catch (commError) {
-            console.error('Error fetching comments:', commError);
-            // Don't set an error for comments, just show empty
-          }
-        }
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching asset:', err);
-        setError(err instanceof ApiError ? err.message : 'Failed to load asset');
-      } finally {
-        setIsLoading(false);
-      }
-    }
+  // Fetch asset data
+  const { 
+    data: asset, 
+    isLoading, 
+    error 
+  } = useAssetQuery(id as string);
 
-    fetchAssetData();
-  }, [id]);
+  // Fetch comments
+  const { 
+    comments, 
+    isLoading: isLoadingComments 
+  } = useCommentsQuery(id as string);
+
+  const safeComments = comments ?? []
+
+  // Like/unlike mutations
+  const { toggleLike, isLoading: isLikeLoading } = useAssetLikeToggle();
+
+  // Create comment mutation
+  const createCommentMutation = useCreateCommentMutation();
 
   // Scroll to bottom of comments when new one is added
   useEffect(() => {
@@ -98,20 +76,7 @@ export default function AssetDetailPage() {
     
     if (!asset) return;
     
-    try {
-      if (liked) {
-        await api.likes.unlikeAsset(asset.id);
-      } else {
-        await api.likes.likeAsset(asset.id);
-      }
-      
-      setLikeCount(liked ? likeCount - 1 : likeCount + 1);
-      setLiked(!liked);
-      toast.success(liked ? 'Like removed' : 'Asset liked');
-    } catch (error) {
-      console.error('Error liking/unliking asset:', error);
-      toast.error('Failed to process your request');
-    }
+    toggleLike(asset.id, asset.likedByUser || false);
   };
 
   const handleShare = () => {
@@ -143,24 +108,14 @@ export default function AssetDetailPage() {
     
     if (!asset || !comment.trim()) return;
     
-    setIsSubmittingComment(true);
-    
-    try {
-      const newComment = await api.comments.create({
-        assetId: asset.id,
-        content: comment
-      });
-      
-      // Add the new comment to the state
-      setComments(prev => [newComment, ...prev]);
-      setComment('');
-      toast.success('Comment added');
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      toast.error('Failed to add comment');
-    } finally {
-      setIsSubmittingComment(false);
-    }
+    createCommentMutation.mutate({
+      assetId: asset.id,
+      content: comment
+    }, {
+      onSuccess: () => {
+        setComment('');
+      }
+    });
   };
 
   const renderAssetPreview = () => {
@@ -222,7 +177,7 @@ export default function AssetDetailPage() {
       <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center text-center">
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-2xl font-bold mb-2">Asset not found</h2>
-        <p className="text-muted-foreground mb-6">{error || 'The asset you are looking for could not be found'}</p>
+        <p className="text-muted-foreground mb-6">{error instanceof Error ? error.message : 'The asset you are looking for could not be found'}</p>
         <Button variant="outline" onClick={() => router.push('/')}>Return to Home</Button>
       </div>
     );
@@ -231,7 +186,7 @@ export default function AssetDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ——————————————————————————————  Main column */}
+        {/* Main column */}
         <div className="lg:col-span-2 space-y-6">
           {renderAssetPreview()}
 
@@ -241,16 +196,17 @@ export default function AssetDetailPage() {
               <button 
                 onClick={handleLike}
                 className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"
+                disabled={isLikeLoading}
               >
-                <Heart className={`h-5 w-5 ${liked ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
-                <span>{likeCount}</span>
+                <Heart className={`h-5 w-5 ${asset.likedByUser ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
+                <span>{asset.likes}</span>
               </button>
               <button
                 onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
                 className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"
               >
                 <MessageSquare className="h-5 w-5" />
-                <span>{comments.length}</span>
+                <span>{safeComments.length}</span>
               </button>
             </div>
             <div className="flex space-x-2">
@@ -270,7 +226,7 @@ export default function AssetDetailPage() {
           </div>
           {asset.tags && asset.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {asset.tags.map((tag, i) => (
+              {asset.tags.map((tag: string, i: number) => (
                 <Link
                   key={i}
                   href={`/search?tag=${tag}`}
@@ -284,7 +240,7 @@ export default function AssetDetailPage() {
 
           {/* comments */}
           <div id="comments" className="space-y-6 pt-6 border-t">
-            <h2 className="text-xl font-semibold">Comments ({comments.length})</h2>
+            <h2 className="text-xl font-semibold">Comments ({safeComments.length})</h2>
             {session ? (
               <form onSubmit={handleSubmitComment} className="space-y-4">
                 <Textarea
@@ -294,8 +250,11 @@ export default function AssetDetailPage() {
                   rows={3}
                 />
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={!comment.trim() || isSubmittingComment}>
-                    {isSubmittingComment ? 'Posting...' : 'Post Comment'}
+                  <Button 
+                    type="submit" 
+                    disabled={!comment.trim() || createCommentMutation.isPending}
+                  >
+                    {createCommentMutation.isPending ? 'Posting...' : 'Post Comment'}
                   </Button>
                 </div>
               </form>
@@ -308,47 +267,53 @@ export default function AssetDetailPage() {
               </div>
             )}
 
-            <div className="space-y-4">
-              {comments.map((c) => (
-                <div key={c.id} className="border-b pb-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <Link href={`/u/${c.user.username}`}>
-                        <div className="relative h-10 w-10 rounded-full overflow-hidden bg-muted">
-                          {c.user.image
-                            ? <Image
-                                src={c.user.image}
-                                alt={c.user.name || ''}
-                                fill
-                                className="object-cover"
-                                placeholder="blur"
-                                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                              />
-                            : <User className="h-10 w-10 p-2 text-muted-foreground" />}
-                        </div>
-                      </Link>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start">
-                        <Link href={`/u/${c.user.username}`} className="font-medium hover:text-pixelshelf-primary">
-                          {c.user.name || c.user.username}
+            {isLoadingComments ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {safeComments.map((c: Comment) => (
+                  <div key={c.id} className="border-b pb-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <Link href={`/u/${c.user.username}`}>
+                          <div className="relative h-10 w-10 rounded-full overflow-hidden bg-muted">
+                            {c.user.image
+                              ? <Image
+                                  src={c.user.image}
+                                  alt={c.user.name || ''}
+                                  fill
+                                  className="object-cover"
+                                  placeholder="blur"
+                                  blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                />
+                              : <User className="h-10 w-10 p-2 text-muted-foreground" />}
+                          </div>
                         </Link>
-                        <span className="text-xs text-muted-foreground">
-                          {getRelativeTime(c.createdAt)}
-                        </span>
                       </div>
-                      <p className="mt-1">{c.content}</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <Link href={`/u/${c.user.username}`} className="font-medium hover:text-pixelshelf-primary">
+                            {c.user.name || c.user.username}
+                          </Link>
+                          <span className="text-xs text-muted-foreground">
+                            {getRelativeTime(c.createdAt)}
+                          </span>
+                        </div>
+                        <p className="mt-1">{c.content}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              <div ref={messageEndRef} />
-            </div>
+                ))}
+                <div ref={messageEndRef} />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* ——————————————————————————————  Sidebar */}
+        {/* Sidebar */}
         <div className="space-y-6">
           {/* creator card */}
           {asset.user && (
@@ -430,11 +395,11 @@ export default function AssetDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Likes</span>
-                <span>{likeCount}</span>
+                <span>{asset.likes}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Comments</span>
-                <span>{comments.length}</span>
+                <span>{safeComments.length}</span>
               </div>
             </div>
           </div>
