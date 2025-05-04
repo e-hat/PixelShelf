@@ -41,18 +41,12 @@ export async function GET(
             user: { select: { username: true } },
           },
         },
-        likes: {
-          select: { userId: true },
+        _count: { 
+          select: { 
+            likes: true, 
+            comments: true 
+          } 
         },
-        comments: {
-          orderBy: { createdAt: 'desc' },
-          include: {
-            user: {
-              select: { id: true, name: true, username: true, image: true },
-            },
-          },
-        },
-        _count: { select: { likes: true, comments: true } },
       },
     });
 
@@ -72,19 +66,29 @@ export async function GET(
     }
 
     const session = await getServerSession(authOptions);
+    
+    // Check if the current user has liked this asset
+    let likedByUser = false;
+    if (session?.user) {
+      const like = await prisma.like.findUnique({
+        where: {
+          userId_assetId: {
+            userId: session.user.id,
+            assetId: id,
+          },
+        },
+      });
+      likedByUser = !!like;
+    }
+    
     // Format the response payload
-    const formattedAsset: any = {
+    const formattedAsset = {
       ...asset,
       likes: asset._count.likes,
-      likedByUser: false,
+      comments: asset._count.comments,
+      likedByUser,
       _count: undefined,
     };
-
-    if (session?.user) {
-      formattedAsset.likedByUser = asset.likes.some(
-        (like: { userId: string; }) => like.userId === session.user.id
-      );
-    }
 
     return NextResponse.json(formattedAsset);
   } catch (error) {
@@ -169,10 +173,35 @@ export async function PATCH(
         project: {
           select: { id: true, title: true },
         },
+        _count: {
+          select: { 
+            likes: true,
+            comments: true 
+          },
+        },
       },
     });
+    
+    // Check if the user has liked this asset
+    const like = await prisma.like.findUnique({
+      where: {
+        userId_assetId: {
+          userId: session.user.id,
+          assetId: id,
+        },
+      },
+    });
+    
+    // Format the response payload
+    const formattedAsset = {
+      ...updatedAsset,
+      likes: updatedAsset._count.likes,
+      comments: updatedAsset._count.comments,
+      likedByUser: !!like,
+      _count: undefined,
+    };
 
-    return NextResponse.json(updatedAsset);
+    return NextResponse.json(formattedAsset);
   } catch (error) {
     console.error('Error updating asset:', error);
     return NextResponse.json(

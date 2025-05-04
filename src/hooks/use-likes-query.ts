@@ -1,7 +1,5 @@
 // src/hooks/use-likes-query.ts
 
-// TODO: Make assets show up as liked across pages. Implement a reusable component to handle this?
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/api-client';
 import { toast } from 'sonner';

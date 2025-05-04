@@ -28,8 +28,9 @@ import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useProjectQuery} from '@/hooks/use-projects-query';
 import { useAssetsQuery } from '@/hooks/use-assets-query';
-import { useProjectLikeToggle } from '@/hooks/use-likes-query';
 import { Asset } from '@/types';
+import { LikeButton } from '@/components/shared/like-button';
+import { useProjectLikeToggle } from '@/hooks/use-likes-query';
 
 type Params = Promise<{ username: string; id: string }>;
 
@@ -57,21 +58,10 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
     enabled: !!project
   });
 
-  // Like/unlike mutations
+  // Project like functionality
   const { toggleLike, isLoading: isLikeLoading } = useProjectLikeToggle();
 
   const isOwner = session?.user?.username === username;
-
-  const handleLike = async () => {
-    if (!session) {
-      toast.error("Please sign in to like this project");
-      return;
-    }
-    
-    if (!project) return;
-    
-    toggleLike(project.id, project.likedByUser || false);
-  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -125,16 +115,18 @@ export default function ProjectDetailPage({ params }: { params: Params }) {
               </Button>
             </Link>
           )}
-          <Button
-            variant={project.likedByUser ? "default" : "outline"}
-            size="sm"
-            onClick={handleLike}
-            disabled={isLikeLoading}
-            className={project.likedByUser ? "bg-pixelshelf-primary hover:bg-pixelshelf-primary/90" : ""}
-          >
-            <Heart className={`h-4 w-4 mr-2 ${project.likedByUser ? "fill-white" : ""}`} />
-            {project.likes}
-          </Button>
+          <LikeButton 
+            isLiked={project.likedByUser || false}
+            likeCount={project.likes || 0}
+            onToggle={() => {
+              if (!session) {
+                toast.error('Please sign in to like this project');
+                return;
+              }
+              toggleLike(project.id, project.likedByUser || false);
+            }}
+            isLoading={isLikeLoading}
+          />
           <Button variant="outline" size="sm" onClick={handleShare}>
             <Share className="h-4 w-4 mr-2" />
             Share

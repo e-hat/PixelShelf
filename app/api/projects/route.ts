@@ -97,6 +97,19 @@ export async function GET(req: NextRequest) {
     // Get total count for pagination
     const totalCount = await prisma.project.count({ where });
     
+    // Get user's liked projects (if authenticated)
+    let userLikedProjectIds: string[] = [];
+    if (session?.user) {
+      const userLikes = await prisma.like.findMany({
+        where: {
+          userId: session.user.id,
+          projectId: { not: null },
+        },
+        select: { projectId: true },
+      });
+      userLikedProjectIds = userLikes.map(like => like.projectId as string);
+    }
+    
     // Fetch projects with pagination
     const projects = await prisma.project.findMany({
       where,
@@ -122,10 +135,11 @@ export async function GET(req: NextRequest) {
     });
     
     // Format the response
-    const formattedProjects = projects.map((project: { _count: { assets: any; likes: any; }; }) => ({
+    const formattedProjects = projects.map((project) => ({
       ...project,
       assetCount: project._count.assets,
       likes: project._count.likes,
+      likedByUser: userLikedProjectIds.includes(project.id),
       _count: undefined,
     }));
     
@@ -208,10 +222,25 @@ export async function POST(req: NextRequest) {
             image: true,
           },
         },
+        _count: {
+          select: {
+            assets: true,
+            likes: true,
+          },
+        },
       },
     });
     
-    return NextResponse.json(newProject, { status: 201 });
+    // Format the response
+    const formattedProject = {
+      ...newProject,
+      assetCount: newProject._count.assets,
+      likes: newProject._count.likes,
+      likedByUser: false, // New projects are not liked by default
+      _count: undefined,
+    };
+    
+    return NextResponse.json(formattedProject, { status: 201 });
   } catch (error) {
     console.error('Error creating project:', error);
     return NextResponse.json(

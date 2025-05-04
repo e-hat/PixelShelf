@@ -52,9 +52,6 @@ export async function GET(
             },
           },
         },
-        likes: {
-          select: { userId: true },
-        },
         _count: {
           select: { likes: true, assets: true },
         },
@@ -80,30 +77,57 @@ export async function GET(
     }
 
     // Format assets
-    const formattedAssets = project.assets.map((asset: { _count: { likes: any; comments: any; }; }) => ({
+    const formattedAssets = project.assets.map((asset: any) => ({
       ...asset,
       likes: asset._count.likes,
       comments: asset._count.comments,
       _count: undefined,
     }));
 
+    // Check if the current user has liked this project
+    const session = await getServerSession(authOptions);
+    let likedByUser = false;
+    
+    if (session?.user) {
+      const like = await prisma.like.findUnique({
+        where: {
+          userId_projectId: {
+            userId: session.user.id,
+            projectId: id,
+          },
+        },
+      });
+      likedByUser = !!like;
+      
+      // Also check which assets are liked by the user
+      if (formattedAssets.length > 0) {
+        const assetIds = formattedAssets.map((asset: any) => asset.id);
+        const likedAssets = await prisma.like.findMany({
+          where: {
+            userId: session.user.id,
+            assetId: { in: assetIds },
+          },
+          select: { assetId: true },
+        });
+        
+        const likedAssetIds = likedAssets.map(like => like.assetId);
+        
+        // Add likedByUser flag to each asset
+        formattedAssets.forEach((asset: any) => {
+          asset.likedByUser = likedAssetIds.includes(asset.id);
+        });
+      }
+    }
+
     // Build formatted project
-    const formattedProject: any = {
+    const formattedProject = {
       ...project,
       assets: formattedAssets,
       likes: project._count.likes,
       assetCount: project._count.assets,
-      likedByUser: false,
+      likedByUser,
       _count: undefined,
     };
-
-    // Mark likedByUser
-    const session = await getServerSession(authOptions);
-    if (session?.user) {
-      formattedProject.likedByUser = project.likes.some(
-        ( like: { userId: string; }) => like.userId === session.user.id
-      );
-    }
 
     return NextResponse.json(formattedProject);
   } catch (error) {
@@ -176,10 +200,35 @@ export async function PATCH(
             image: true,
           },
         },
+        _count: {
+          select: {
+            likes: true,
+            assets: true,
+          },
+        },
       },
     });
+    
+    // Check if the user has liked this project
+    const like = await prisma.like.findUnique({
+      where: {
+        userId_projectId: {
+          userId: session.user.id,
+          projectId: id,
+        },
+      },
+    });
+    
+    // Format the response
+    const formattedProject = {
+      ...updatedProject,
+      likes: updatedProject._count.likes,
+      assetCount: updatedProject._count.assets,
+      likedByUser: !!like,
+      _count: undefined,
+    };
 
-    return NextResponse.json(updatedProject);
+    return NextResponse.json(formattedProject);
   } catch (error) {
     console.error('Error updating project:', error);
     return NextResponse.json(

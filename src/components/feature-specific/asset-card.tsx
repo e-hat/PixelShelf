@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
-import { Heart, MessageSquare, Share, Play, FileAudio, File, Box, FileText } from 'lucide-react';
+import { MessageSquare, Share, Play, FileAudio, File, Box, FileText } from 'lucide-react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { getRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import { Asset } from '@/types';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { useAssetLikeToggle } from '@/hooks/use-likes-query';
+import { LikeButton } from '@/components/shared/like-button';
 
 interface AssetCardProps {
   asset: Asset;
@@ -20,28 +20,8 @@ interface AssetCardProps {
 export default function AssetCard({ asset }: AssetCardProps) {
   const { data: session } = useSession();
   
-  // Use the optimistic UI approach for likes - start with the initial state from the asset
-  const [isLiked, setIsLiked] = useState(asset.likedByUser || false);
-  const [likeCount, setLikeCount] = useState(asset.likes || 0);
-  
   // Use the asset like toggle hook
   const { toggleLike, isLoading: isLikeLoading } = useAssetLikeToggle();
-
-  const handleLike = async () => {
-    if (!session) {
-      toast.error('Please sign in to like this asset');
-      return;
-    }
-    
-    if (isLikeLoading) return;
-    
-    // Optimistically update UI
-    setIsLiked(!isLiked);
-    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
-    
-    // Call the mutation
-    toggleLike(asset.id, isLiked);
-  };
 
   // Determine what to render based on the asset type
   const renderAssetPreview = () => {
@@ -157,14 +137,18 @@ export default function AssetCard({ asset }: AssetCardProps) {
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-between">
         <div className="flex items-center space-x-4">
-          <button 
-            onClick={handleLike}
-            className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"
-            disabled={isLikeLoading}
-          >
-            <Heart className={`h-4 w-4 ${isLiked ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
-            <span>{likeCount}</span>
-          </button>
+          <LikeButton
+            isLiked={asset.likedByUser ?? false}
+            likeCount={asset.likes ?? 0}
+            onToggle={() => {
+              if (!session) {
+                toast.error('Please sign in to like this asset');
+                return;
+              }
+              toggleLike(asset.id, asset.likedByUser ?? false);
+            }}
+            isLoading={isLikeLoading}
+          />
           <Link 
             href={`/assets/${asset.id}#comments`}
             className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"

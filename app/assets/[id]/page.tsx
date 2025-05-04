@@ -7,7 +7,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  Heart, 
   MessageSquare, 
   Share, 
   Download, 
@@ -32,6 +31,7 @@ import {
   useCreateCommentMutation 
 } from '@/hooks/use-comments-query';
 import { useAssetLikeToggle } from '@/hooks/use-likes-query';
+import { LikeButton } from '@/components/shared/like-button';
 import { Comment } from '@/types';
 
 export default function AssetDetailPage() {
@@ -67,17 +67,6 @@ export default function AssetDetailPage() {
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
-
-  const handleLike = async () => {
-    if (!session) {
-      toast.error('Please sign in to like this asset');
-      return;
-    }
-    
-    if (!asset) return;
-    
-    toggleLike(asset.id, asset.likedByUser || false);
-  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -193,14 +182,19 @@ export default function AssetDetailPage() {
           {/* like / comment / share buttons */}
           <div className="flex items-center justify-between">
             <div className="flex space-x-4">
-              <button 
-                onClick={handleLike}
-                className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"
-                disabled={isLikeLoading}
-              >
-                <Heart className={`h-5 w-5 ${asset.likedByUser ? 'fill-pixelshelf-primary text-pixelshelf-primary' : ''}`} />
-                <span>{asset.likes}</span>
-              </button>
+              <LikeButton 
+                isLiked={asset.likedByUser || false}
+                likeCount={asset.likes || 0}
+                onToggle={() => {
+                  if (!session) {
+                    toast.error('Please sign in to like this asset');
+                    return;
+                  }
+                  if (!asset) return;
+                  toggleLike(asset.id, asset.likedByUser || false);
+                }}
+                isLoading={isLikeLoading}
+              />
               <button
                 onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
                 className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-pixelshelf-primary"

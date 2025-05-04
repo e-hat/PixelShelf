@@ -80,6 +80,22 @@ export async function GET(req: NextRequest) {
     // Get total count for pagination
     const totalCount = await prisma.asset.count({ where });
     
+    // Get the current user's session
+    const session = await getServerSession(authOptions);
+    
+    // Get user's liked assets (if authenticated)
+    let userLikedAssetIds: string[] = [];
+    if (session?.user) {
+      const userLikes = await prisma.like.findMany({
+        where: {
+          userId: session.user.id,
+          assetId: { not: null },
+        },
+        select: { assetId: true },
+      });
+      userLikedAssetIds = userLikes.map(like => like.assetId as string);
+    }
+    
     // Fetch assets with pagination
     const assets = await prisma.asset.findMany({
       where,
@@ -110,11 +126,12 @@ export async function GET(req: NextRequest) {
       },
     });
     
-    // Format the response
-    const formattedAssets = assets.map((asset: { _count: { likes: any; comments: any; }; }) => ({
+    // Format the response with like counts and liked status
+    const formattedAssets = assets.map((asset: any) => ({
       ...asset,
       likes: asset._count.likes,
       comments: asset._count.comments,
+      likedByUser: userLikedAssetIds.includes(asset.id),
       _count: undefined,
     }));
     
@@ -210,10 +227,25 @@ export async function POST(req: NextRequest) {
             title: true,
           },
         } : undefined,
+        _count: {
+          select: { 
+            likes: true,
+            comments: true 
+          },
+        },
       },
     });
     
-    return NextResponse.json(newAsset, { status: 201 });
+    // Format the response
+    const formattedAsset = {
+      ...newAsset,
+      likes: newAsset._count.likes,
+      comments: newAsset._count.comments,
+      likedByUser: false, // New assets are not liked by default
+      _count: undefined,
+    };
+    
+    return NextResponse.json(formattedAsset, { status: 201 });
   } catch (error) {
     console.error('Error creating asset:', error);
     return NextResponse.json(

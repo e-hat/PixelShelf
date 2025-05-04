@@ -1,4 +1,7 @@
 // src/hooks/use-search-query.ts
+
+// TODO: Fix search happening on every key press. Debounce?
+
 import {
   useInfiniteQuery,
   useQuery,
