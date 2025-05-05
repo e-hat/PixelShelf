@@ -29,7 +29,7 @@ export default function HomeFeed() {
       />
       <DashboardFeed 
         initialTab="trending" 
-        tabs={homeTabs} 
+        tabs={homeTabs}
       />
     </div>
   );

@@ -148,6 +148,23 @@ export const api = {
       return apiClient.get(`/api/users/${username}/following?${searchParams.toString()}`);
     },
     updateProfile: (data: any) => apiClient.patch('/api/users/profile', data),
+    getCreators: (params?: { 
+      search?: string; 
+      tag?: string; 
+      page?: number; 
+      limit?: number;
+      sort?: 'popular' | 'latest'
+    }) => {
+      const searchParams = new URLSearchParams();
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        });
+      }
+      return apiClient.get(`/api/users?${searchParams.toString()}`);
+    },
   },
 
   // Follow

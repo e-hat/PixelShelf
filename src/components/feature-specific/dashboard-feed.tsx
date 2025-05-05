@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,10 +19,12 @@ import {
   Users,
 } from 'lucide-react';
 import { useAssetsQuery } from '@/hooks/use-assets-query';
+import { useCreatorsQuery, useTrendingCreatorsQuery } from '@/hooks/use-creators-query';
 import { PAGINATION } from '@/constants';
 import { Asset, UserProfile } from '@/types';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import type { AssetGridFilters } from '@/components/shared/asset-grid';
 
 export type TabOption = {
   id: string;
@@ -32,24 +34,29 @@ export type TabOption = {
   requiredAuth?: boolean;
 };
 
-interface DashboardFeedProps {
+export interface DashboardFeedProps {
   initialTab?: string;
   className?: string;
   tabs?: TabOption[];
   title?: string;
   description?: string;
+  searchQuery?: string;
+  selectedTags?: string[];
+  selectedType?: string | null;
+  onFilterChange?: (filters: AssetGridFilters) => void;
+  showSearch?: boolean;
 }
 
 const DEFAULT_TABS: TabOption[] = [
   {
     id: 'trending',
     label: 'Trending',
-    icon: <TrendingUp className="mr-2 h-4 w-4" />,
+    icon: <TrendingUp className="h-4 w-4 mr-2" />,
   },
   {
     id: 'following',
     label: 'Following',
-    icon: <UserCheck className="mr-2 h-4 w-4" />,
+    icon: <UserCheck className="h-4 w-4 mr-2" />,
     requiredAuth: true,
   },
 ];
@@ -60,6 +67,11 @@ export function DashboardFeed({
   tabs = DEFAULT_TABS,
   title,
   description,
+  searchQuery = '',
+  selectedTags = [],
+  selectedType = null,
+  onFilterChange,
+  showSearch = true,
 }: DashboardFeedProps) {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -78,6 +90,9 @@ export function DashboardFeed({
   } = useAssetsQuery({
     sort: 'popular',
     limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'trending' ? searchQuery : undefined,
+    tag: activeTab === 'trending' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'trending' ? selectedType || undefined : undefined,
   });
 
   // Following feed (infinite, only after sign-in)
@@ -92,6 +107,9 @@ export function DashboardFeed({
   } = useAssetsQuery({
     sort: 'latest',
     limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'following' ? searchQuery : undefined,
+    tag: activeTab === 'following' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'following' ? selectedType || undefined : undefined,
     enabled: !!session,
   });
 
@@ -107,59 +125,28 @@ export function DashboardFeed({
   } = useAssetsQuery({
     sort: 'latest',
     limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'assets' ? searchQuery : undefined,
+    tag: activeTab === 'assets' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'assets' ? selectedType || undefined : undefined,
+    enabled: activeTab === 'assets',
   });
 
-  // Mock creators data for MVP
-  // In a real implementation, this would fetch from the API
-  const creatorsData = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      username: 'pixelartist',
-      image: '/placeholders/user1.jpg',
-      bio: 'Pixel artist specializing in retro game assets and animations',
-      stats: {
-        followers: 345,
-        following: 120,
-        assets: 48,
-        projects: 12,
-      },
-    },
-    {
-      id: '2',
-      name: 'David Chen',
-      username: 'lowpolydave',
-      image: '/placeholders/user2.jpg',
-      bio: '3D modeler creating low-poly assets for indie games',
-      stats: {
-        followers: 521,
-        following: 89,
-        assets: 64,
-        projects: 8,
-      },
-    },
-    {
-      id: '3',
-      name: 'Maya Rodriguez',
-      username: 'soundscape',
-      image: '/placeholders/user3.jpg',
-      bio: 'Game audio designer and composer with focus on atmospheric soundscapes',
-      stats: {
-        followers: 267,
-        following: 142,
-        assets: 36,
-        projects: 5,
-      },
-    },
-  ] as UserProfile[];
+  // Creators feed (for explore page) - Using real data now
+  const {
+    creators,
+    isLoading: isCreatorsLoading,
+    error: creatorsError,
+    hasMore: creatorsHasMore,
+    isLoadingMore: isCreatorsLoadingMore,
+    loadMore: loadMoreCreators,
+    refetch: reloadCreators,
+  } = useCreatorsQuery({
+    search: activeTab === 'creators' ? searchQuery : undefined,
+    tag: activeTab === 'creators' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    sort: 'popular', // Default to popular for creators
+    enabled: activeTab === 'creators',
+  });
   
-  const isCreatorsLoading = false;
-  const creatorsError = null;
-  const creatorsHasMore = false;
-  const isCreatorsLoadingMore = false;
-  const loadMoreCreators = () => {};
-  const reloadCreators = () => {};
-
   // Tab switch handler
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -225,13 +212,14 @@ export function DashboardFeed({
         };
       case 'creators':
         return {
-          data: creatorsData,
+          data: creators,
           isLoading: isCreatorsLoading,
           error: creatorsError,
           hasMore: creatorsHasMore,
           isLoadingMore: isCreatorsLoadingMore,
           loadMore: loadMoreCreators,
           reload: reloadCreators,
+          type: 'creator', // Type flag to identify creators data
         };
       default:
         return {
@@ -246,7 +234,7 @@ export function DashboardFeed({
     }
   };
 
-  const { data, isLoading, error, hasMore, isLoadingMore, loadMore } = getTabData();
+  const { data, isLoading, error, hasMore, isLoadingMore, loadMore, type } = getTabData();
 
   // Animation variants for grid items
   const itemVariants = {
@@ -337,12 +325,12 @@ export function DashboardFeed({
               isCreatorsLoading ? (
                 <LoadingState type="creator" />
               ) : creatorsError ? (
-                <ErrorState error={creatorsError || "Failed to load creators"} onRetry={reloadCreators} />
-              ) : creatorsData.length === 0 ? (
+                <ErrorState error={creatorsError.message || "Failed to load creators"} onRetry={reloadCreators} />
+              ) : creators.length === 0 ? (
                 <EmptyState message="No creators found." />
               ) : (
                 <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-                  {creatorsData.map((creator, index) => (
+                  {creators.map((creator: UserProfile, index: number) => (
                     <motion.div
                       key={creator.id}
                       variants={itemVariants}

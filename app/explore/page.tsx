@@ -228,6 +228,11 @@ export default function ExplorePage() {
         <DashboardFeed 
           initialTab={activeTab}
           tabs={exploreTabs}
+          searchQuery={searchQuery}
+          selectedTags={selectedTags}
+          selectedType={selectedType}
+          onFilterChange={handleFilterChange}
+          showSearch={false} // Hide duplicate search in DashboardFeed
         />
       </div>
     </div>
