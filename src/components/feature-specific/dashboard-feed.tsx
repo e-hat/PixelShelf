@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import AssetCard from '@/components/feature-specific/asset-card';
@@ -13,24 +14,57 @@ import {
   TrendingUp,
   UserCheck,
   AlertCircle,
+  Grid as GridIcon,
+  LayoutList,
+  Users,
 } from 'lucide-react';
 import { useAssetsQuery } from '@/hooks/use-assets-query';
 import { PAGINATION } from '@/constants';
-import { Asset } from '@/types';
+import { Asset, UserProfile } from '@/types';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+
+export type TabOption = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  description?: string;
+  requiredAuth?: boolean;
+};
 
 interface DashboardFeedProps {
-  initialTab?: 'trending' | 'following';
+  initialTab?: string;
   className?: string;
+  tabs?: TabOption[];
+  title?: string;
+  description?: string;
 }
+
+const DEFAULT_TABS: TabOption[] = [
+  {
+    id: 'trending',
+    label: 'Trending',
+    icon: <TrendingUp className="mr-2 h-4 w-4" />,
+  },
+  {
+    id: 'following',
+    label: 'Following',
+    icon: <UserCheck className="mr-2 h-4 w-4" />,
+    requiredAuth: true,
+  },
+];
 
 export function DashboardFeed({
   initialTab = 'trending',
   className,
+  tabs = DEFAULT_TABS,
+  title,
+  description,
 }: DashboardFeedProps) {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<'trending' | 'following'>(initialTab);
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Trending feed (infinite)
   const {
@@ -61,121 +95,422 @@ export function DashboardFeed({
     enabled: !!session,
   });
 
+  // Assets feed (for explore page)
+  const {
+    assets: assetsData,
+    isLoading: isAssetsLoading,
+    error: assetsError,
+    hasMore: assetsHasMore,
+    isLoadingMore: isAssetsLoadingMore,
+    loadMore: loadMoreAssets,
+    refetch: reloadAssets,
+  } = useAssetsQuery({
+    sort: 'latest',
+    limit: PAGINATION.DEFAULT_LIMIT,
+  });
+
+  // Mock creators data for MVP
+  // In a real implementation, this would fetch from the API
+  const creatorsData = [
+    {
+      id: '1',
+      name: 'Sarah Johnson',
+      username: 'pixelartist',
+      image: '/placeholders/user1.jpg',
+      bio: 'Pixel artist specializing in retro game assets and animations',
+      stats: {
+        followers: 345,
+        following: 120,
+        assets: 48,
+        projects: 12,
+      },
+    },
+    {
+      id: '2',
+      name: 'David Chen',
+      username: 'lowpolydave',
+      image: '/placeholders/user2.jpg',
+      bio: '3D modeler creating low-poly assets for indie games',
+      stats: {
+        followers: 521,
+        following: 89,
+        assets: 64,
+        projects: 8,
+      },
+    },
+    {
+      id: '3',
+      name: 'Maya Rodriguez',
+      username: 'soundscape',
+      image: '/placeholders/user3.jpg',
+      bio: 'Game audio designer and composer with focus on atmospheric soundscapes',
+      stats: {
+        followers: 267,
+        following: 142,
+        assets: 36,
+        projects: 5,
+      },
+    },
+  ] as UserProfile[];
+  
+  const isCreatorsLoading = false;
+  const creatorsError = null;
+  const creatorsHasMore = false;
+  const isCreatorsLoadingMore = false;
+  const loadMoreCreators = () => {};
+  const reloadCreators = () => {};
+
   // Tab switch handler
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'trending' | 'following');
+    setActiveTab(tab);
   };
 
   // Pull-to-refresh
   const refreshFeed = async () => {
     setIsRefreshing(true);
     try {
-      if (activeTab === 'trending') {
-        await reloadTrending();
-      } else {
-        await reloadFollowing();
+      switch (activeTab) {
+        case 'trending':
+          await reloadTrending();
+          break;
+        case 'following':
+          await reloadFollowing();
+          break;
+        case 'assets':
+          await reloadAssets();
+          break;
+        case 'creators':
+          await reloadCreators();
+          break;
+        default:
+          await reloadTrending();
       }
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
-  // Load more pages
-  const loadMore = () => {
-    if (activeTab === 'trending') {
-      loadMoreTrending();
-    } else {
-      loadMoreFollowing();
+  // Get the right data for the active tab
+  const getTabData = () => {
+    switch (activeTab) {
+      case 'trending':
+        return {
+          data: trendingAssets,
+          isLoading: isTrendingLoading,
+          error: trendingError,
+          hasMore: trendingHasMore,
+          isLoadingMore: isTrendingLoadingMore,
+          loadMore: loadMoreTrending,
+          reload: reloadTrending,
+        };
+      case 'following':
+        return {
+          data: followingAssets,
+          isLoading: isFollowingLoading,
+          error: followingError,
+          hasMore: followingHasMore,
+          isLoadingMore: isFollowingLoadingMore,
+          loadMore: loadMoreFollowing,
+          reload: reloadFollowing,
+        };
+      case 'assets':
+        return {
+          data: assetsData,
+          isLoading: isAssetsLoading,
+          error: assetsError,
+          hasMore: assetsHasMore,
+          isLoadingMore: isAssetsLoadingMore,
+          loadMore: loadMoreAssets,
+          reload: reloadAssets,
+        };
+      case 'creators':
+        return {
+          data: creatorsData,
+          isLoading: isCreatorsLoading,
+          error: creatorsError,
+          hasMore: creatorsHasMore,
+          isLoadingMore: isCreatorsLoadingMore,
+          loadMore: loadMoreCreators,
+          reload: reloadCreators,
+        };
+      default:
+        return {
+          data: trendingAssets,
+          isLoading: isTrendingLoading,
+          error: trendingError,
+          hasMore: trendingHasMore,
+          isLoadingMore: isTrendingLoadingMore,
+          loadMore: loadMoreTrending,
+          reload: reloadTrending,
+        };
     }
   };
 
-  // Choose the right data for the active tab
-  const currentAssets = activeTab === 'trending' ? trendingAssets : followingAssets;
-  const isLoading = activeTab === 'trending' ? isTrendingLoading : isFollowingLoading;
-  const error = activeTab === 'trending' ? trendingError : followingError;
-  const hasMore = activeTab === 'trending' ? trendingHasMore : followingHasMore;
-  const isLoadingMore =
-    activeTab === 'trending' ? isTrendingLoadingMore : isFollowingLoadingMore;
+  const { data, isLoading, error, hasMore, isLoadingMore, loadMore } = getTabData();
 
-  // Simulate “following” filter client-side (MVP)
-  const filteredFollowingAssets = followingAssets.slice(0, 3);
+  // Animation variants for grid items
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.05,
+        duration: 0.3,
+        ease: 'easeOut'
+      }
+    }),
+    exit: { opacity: 0, transition: { duration: 0.2 } }
+  };
 
   return (
     <div className={cn('space-y-6', className)}>
+      {title && (
+        <div>
+          <h2 className="text-2xl font-bold">{title}</h2>
+          {description && (
+            <p className="text-muted-foreground">{description}</p>
+          )}
+        </div>
+      )}
+      
       <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
         <div className="flex justify-between items-center">
           <TabsList>
-            <TabsTrigger value="trending" className="flex items-center">
-              <TrendingUp className="mr-2 h-4 w-4" />
-              Trending
-            </TabsTrigger>
-            <TabsTrigger
-              value="following"
-              className="flex items-center"
-              disabled={!session}
-            >
-              <UserCheck className="mr-2 h-4 w-4" />
-              Following
-            </TabsTrigger>
+            {tabs.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className="flex items-center"
+                disabled={tab.requiredAuth && !session}
+              >
+                {tab.icon}
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshFeed}
-            disabled={isLoading || isRefreshing}
-          >
-            <RefreshCw
-              className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')}
-            />
-            Refresh
-          </Button>
+          <div className="flex items-center space-x-2">
+            <div className="flex rounded-md overflow-hidden border">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-2 ${
+                  viewMode === "grid" ? "bg-muted" : "bg-background"
+                }`}
+                title="Grid view"
+              >
+                <GridIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 ${
+                  viewMode === "list" ? "bg-muted" : "bg-background"
+                }`}
+                title="List view"
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshFeed}
+              disabled={isLoading || isRefreshing}
+            >
+              <RefreshCw
+                className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')}
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
 
-        {/* Trending Tab Content */}
-        <TabsContent value="trending" className="space-y-6 mt-6">
-          {isTrendingLoading ? (
-            <LoadingState />
-          ) : trendingError ? (
-            <ErrorState error={trendingError.message} onRetry={reloadTrending} />
-          ) : trendingAssets.length === 0 ? (
-            <EmptyState message="No trending assets found." />
-          ) : (
-            <AssetGrid
-              assets={trendingAssets}
-              hasMore={trendingHasMore}
-              isLoadingMore={isTrendingLoadingMore}
-              onLoadMore={loadMore}
-            />
-          )}
-        </TabsContent>
-
-        {/* Following Tab Content */}
-        <TabsContent value="following" className="space-y-6 mt-6">
-          {!session ? (
-            <SignInPrompt />
-          ) : isFollowingLoading ? (
-            <LoadingState />
-          ) : followingError ? (
-            <ErrorState error={followingError.message} onRetry={reloadFollowing} />
-          ) : filteredFollowingAssets.length === 0 ? (
-            <EmptyFollowingState />
-          ) : (
-            <AssetGrid
-              assets={filteredFollowingAssets}
-              hasMore={followingHasMore}
-              isLoadingMore={isFollowingLoadingMore}
-              onLoadMore={loadMore}
-            />
-          )}
-        </TabsContent>
+        {/* Dynamic Tab Contents */}
+        {tabs.map((tab) => (
+          <TabsContent key={tab.id} value={tab.id} className="space-y-6 mt-6">
+            {/* Following tab when not logged in */}
+            {tab.id === 'following' && !session ? (
+              <SignInPrompt />
+            ) : tab.id === 'creators' ? (
+              /* Creators Tab Content */
+              isCreatorsLoading ? (
+                <LoadingState type="creator" />
+              ) : creatorsError ? (
+                <ErrorState error={creatorsError || "Failed to load creators"} onRetry={reloadCreators} />
+              ) : creatorsData.length === 0 ? (
+                <EmptyState message="No creators found." />
+              ) : (
+                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+                  {creatorsData.map((creator, index) => (
+                    <motion.div
+                      key={creator.id}
+                      variants={itemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      custom={index % 10}
+                    >
+                      <CreatorCard creator={creator} variant={viewMode} />
+                    </motion.div>
+                  ))}
+                </div>
+              )
+            ) : (
+              /* Asset Tabs Content (Trending, Following, Assets) */
+              isLoading ? (
+                <LoadingState type="asset" />
+              ) : error ? (
+                <ErrorState error={error.message || "Failed to load assets"} onRetry={refreshFeed} />
+              ) : data.length === 0 ? (
+                tab.id === 'following' ? (
+                  <EmptyFollowingState />
+                ) : (
+                  <EmptyState message={`No ${tab.label.toLowerCase()} found.`} />
+                )
+              ) : (
+                <>
+                  {/* Asset Grid or List */}
+                  <div className={viewMode === 'grid' ? 'grid-masonry' : 'space-y-4'}>
+                    {data.map((asset: Asset, index: number) => (
+                      <motion.div
+                        key={asset.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        custom={index % 10}
+                      >
+                        <AssetCard 
+                          key={asset.id} 
+                          asset={asset} 
+                          variant={viewMode === 'list' ? 'horizontal' : 'vertical'} 
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                  
+                  {/* Load More Button */}
+                  {hasMore && (
+                    <div className="flex justify-center mt-8">
+                      <Button
+                        variant="outline"
+                        onClick={loadMore}
+                        disabled={isLoadingMore}
+                      >
+                        {isLoadingMore ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          'Load More'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )
+            )}
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   );
 }
 
+// Creator Card Component
+function CreatorCard({ creator, variant = 'grid' }: { creator: UserProfile, variant: 'grid' | 'list' }) {
+  if (variant === 'grid') {
+    return (
+      <Link 
+        href={`/u/${creator.username}`}
+        className="block border rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+      >
+        <div className="p-6 text-center">
+          <div className="mx-auto mb-4 relative h-24 w-24 rounded-full overflow-hidden bg-muted">
+            {creator.image ? (
+              <Image 
+                src={creator.image} 
+                alt={creator.name || ''} 
+                fill 
+                className="object-cover"
+                placeholder="blur"
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
+              />
+            ) : (
+              <Users className="h-24 w-24 p-6 text-muted-foreground" />
+            )}
+          </div>
+          <h3 className="font-medium text-lg mb-1">{creator.name || creator.username}</h3>
+          <p className="text-sm text-muted-foreground mb-3">@{creator.username}</p>
+          <p className="text-sm mb-4 line-clamp-2">{creator.bio || 'No bio provided.'}</p>
+          <div className="flex justify-center space-x-4 text-sm text-muted-foreground">
+            <span>{creator.stats?.followers || 0} followers</span>
+            <span>{creator.stats?.assets || 0} assets</span>
+          </div>
+        </div>
+      </Link>
+    );
+  } else {
+    return (
+      <Link 
+        href={`/u/${creator.username}`}
+        className="flex items-center p-4 border rounded-lg hover:shadow-md transition-shadow"
+      >
+        <div className="flex-shrink-0 mr-4 relative h-16 w-16 rounded-full overflow-hidden bg-muted">
+          {creator.image ? (
+            <Image 
+              src={creator.image} 
+              alt={creator.name || ''} 
+              fill 
+              className="object-cover"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          ) : (
+            <Users className="h-16 w-16 p-4 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium mb-1">{creator.name || creator.username}</h3>
+          <p className="text-sm text-muted-foreground mb-1">@{creator.username}</p>
+          <p className="text-sm text-muted-foreground line-clamp-1">{creator.bio || 'No bio provided.'}</p>
+        </div>
+        <div className="flex-shrink-0 ml-4 text-sm text-muted-foreground">
+          <div>{creator.stats?.followers || 0} followers</div>
+          <div>{creator.stats?.assets || 0} assets</div>
+        </div>
+      </Link>
+    );
+  }
+}
+
 // Loading state component
-function LoadingState() {
+function LoadingState({ type = 'asset' }: { type?: 'asset' | 'creator' }) {
+  if (type === 'creator') {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="rounded-lg border bg-card overflow-hidden p-6">
+            <div className="flex flex-col items-center">
+              <Skeleton className="h-24 w-24 rounded-full mb-4" />
+              <Skeleton className="h-5 w-1/2 mb-2" />
+              <Skeleton className="h-4 w-1/3 mb-3" />
+              <Skeleton className="h-4 w-3/4 mb-4" />
+              <div className="flex space-x-4">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {Array.from({ length: 6 }).map((_, index) => (
@@ -200,7 +535,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-      <h3 className="text-lg font-semibold mb-2">Failed to load assets</h3>
+      <h3 className="text-lg font-semibold mb-2">Failed to load content</h3>
       <p className="text-muted-foreground mb-6">{error}</p>
       <Button variant="outline" onClick={onRetry}>
         <RefreshCw className="mr-2 h-4 w-4" />
@@ -217,7 +552,7 @@ function EmptyState({ message }: { message: string }) {
       <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mb-4">
         <TrendingUp className="h-8 w-8 text-muted-foreground" />
       </div>
-      <h3 className="text-lg font-semibold mb-2">No assets found</h3>
+      <h3 className="text-lg font-semibold mb-2">No content found</h3>
       <p className="text-muted-foreground mb-6">{message}</p>
       <Link href="/explore">
         <Button variant="pixel">Explore Assets</Button>
@@ -264,47 +599,5 @@ function SignInPrompt() {
         </Link>
       </div>
     </div>
-  );
-}
-
-// Asset grid component
-function AssetGrid({ 
-  assets, 
-  hasMore, 
-  isLoadingMore, 
-  onLoadMore 
-}: { 
-  assets: Asset[]; 
-  hasMore: boolean; 
-  isLoadingMore: boolean; 
-  onLoadMore: () => void; 
-}) {
-  return (
-    <>
-      <div className="grid-masonry">
-        {assets.map((asset) => (
-          <AssetCard key={asset.id} asset={asset} />
-        ))}
-      </div>
-      
-      {hasMore && (
-        <div className="flex justify-center mt-8">
-          <Button
-            variant="outline"
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-          >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
-    </>
   );
 }

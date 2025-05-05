@@ -31,6 +31,7 @@ interface AssetGridProps {
   allowFiltering?: boolean;
   className?: string;
   onFilterChange?: (filters: AssetGridFilters) => void;
+  variant?: AssetViewMode | 'grid' | 'list';
 }
 
 export interface AssetGridFilters {
@@ -50,11 +51,14 @@ export function AssetGrid({
   allowFiltering = false,
   className,
   onFilterChange,
+  variant,
 }: AssetGridProps) {
   // Get view mode from store for persistence
   const preferences = useAppStore((state) => state.preferences);
   const updatePreferences = useAppStore((state) => state.updatePreferences);
-  const [viewMode, setViewMode] = useState<AssetViewMode>(preferences.gridViewMode);
+  const [viewMode, setViewMode] = useState<AssetViewMode>(
+    variant ? (variant as AssetViewMode) : preferences.gridViewMode
+  );
   const [filters, setFilters] = useState<AssetGridFilters>({
     type: null,
     sort: 'latest',
@@ -63,10 +67,14 @@ export function AssetGrid({
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Update local state when store changes
+  // Update local state when store or props change
   useEffect(() => {
-    setViewMode(preferences.gridViewMode);
-  }, [preferences.gridViewMode]);
+    if (variant) {
+      setViewMode(variant as AssetViewMode);
+    } else {
+      setViewMode(preferences.gridViewMode);
+    }
+  }, [preferences.gridViewMode, variant]);
 
   // Extract available tags from assets
   useEffect(() => {
@@ -181,45 +189,47 @@ export function AssetGrid({
   return (
     <div className={cn("space-y-6", className)}>
       {/* Controls bar */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
-        {/* Filter toggle */}
-        {allowFiltering && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(showFilters ? "bg-muted" : "", "relative")}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-pixelshelf-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </Button>
-        )}
+      {(allowViewToggle || allowFiltering) && (
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+          {/* Filter toggle */}
+          {allowFiltering && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(showFilters ? "bg-muted" : "", "relative")}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-pixelshelf-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          )}
 
-        {/* View mode toggle */}
-        {allowViewToggle && (
-          <div className="flex rounded-md overflow-hidden border self-end">
-            <button
-              onClick={() => toggleViewMode()}
-              className={`p-2 ${viewMode === 'grid' ? 'bg-muted' : 'bg-background'}`}
-              title="Grid view"
-            >
-              <GridIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => toggleViewMode()}
-              className={`p-2 ${viewMode === 'list' ? 'bg-muted' : 'bg-background'}`}
-              title="List view"
-            >
-              <LayoutList className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-      </div>
+          {/* View mode toggle */}
+          {allowViewToggle && (
+            <div className="flex rounded-md overflow-hidden border self-end">
+              <button
+                onClick={() => toggleViewMode()}
+                className={`p-2 ${viewMode === 'grid' ? 'bg-muted' : 'bg-background'}`}
+                title="Grid view"
+              >
+                <GridIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => toggleViewMode()}
+                className={`p-2 ${viewMode === 'list' ? 'bg-muted' : 'bg-background'}`}
+                title="List view"
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters panel */}
       <AnimatePresence>
