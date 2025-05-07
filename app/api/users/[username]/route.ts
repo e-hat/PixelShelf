@@ -30,14 +30,6 @@ export async function GET(
         social: true,
         subscriptionTier: true,
         createdAt: true,
-        _count: {
-          select: {
-            assets: true,
-            projects: true,
-            followers: true,
-            following: true,
-          },
-        },
       },
     });
 
@@ -47,6 +39,24 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    // Get follower and following counts with a direct database query
+    const followersCount = await prisma.follow.count({
+      where: { followingId: user.id },
+    });
+
+    const followingCount = await prisma.follow.count({
+      where: { followerId: user.id },
+    });
+
+    // Get asset and project counts
+    const assetsCount = await prisma.asset.count({
+      where: { userId: user.id },
+    });
+
+    const projectsCount = await prisma.project.count({
+      where: { userId: user.id },
+    });
 
     // Determine follow status and whether this is the current user
     const session = await getServerSession(authOptions);
@@ -68,23 +78,23 @@ export async function GET(
       }
     }
 
-    // Assemble the public profile response
+    // Assemble the public profile response with accurate counts
     const userProfile = {
-      id:               user.id,
-      name:             user.name,
-      username:         user.username,
-      bio:              user.bio,
-      image:            user.image,
-      bannerImage:      user.bannerImage,
-      location:         user.location,
-      social:           user.social,
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      bio: user.bio,
+      image: user.image,
+      bannerImage: user.bannerImage,
+      location: user.location,
+      social: user.social,
       subscriptionTier: user.subscriptionTier,
-      createdAt:        user.createdAt,
+      createdAt: user.createdAt,
       stats: {
-        assets:    user._count.assets,
-        projects:  user._count.projects,
-        followers: user._count.followers,
-        following: user._count.following,
+        assets: assetsCount,
+        projects: projectsCount,
+        followers: followersCount,
+        following: followingCount,
       },
       isFollowing,
       isCurrentUser,

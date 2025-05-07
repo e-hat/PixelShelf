@@ -101,7 +101,12 @@ export const api = {
       if (params) {
         Object.entries(params).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
-            searchParams.append(key, String(value));
+            if (key === 'following' && typeof value === 'boolean') {
+              // Convert boolean to string for URL parameters
+              searchParams.append(key, value.toString());
+            } else {
+              searchParams.append(key, String(value));
+            }
           }
         });
       }
@@ -174,6 +179,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetUserId }),
     }),
+    getFollowerCount: (userId: string) => apiClient.get(`/api/follow/count?userId=${userId}&type=followers`),
+    getFollowingCount: (userId: string) => apiClient.get(`/api/follow/count?userId=${userId}&type=following`),
+    checkFollowStatus: (targetUserId: string) => apiClient.get(`/api/follow/status?targetUserId=${targetUserId}`),
   },
 
   // Comments

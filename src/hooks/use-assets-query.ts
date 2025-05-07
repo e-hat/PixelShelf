@@ -1,4 +1,5 @@
 // src/hooks/use-assets-query.ts
+
 import {
   useInfiniteQuery,
   useMutation,
@@ -24,7 +25,7 @@ export const assetKeys = {
 // Define the shape of one page of API results
 type AssetsPage = Awaited<ReturnType<typeof api.assets.getAll>>;
 
-// Base options type for both query hooks
+// Base options type for both query hooks - adding following option
 type AssetQueryOptions = {
   userId?: string;
   projectId?: string;
@@ -34,6 +35,7 @@ type AssetQueryOptions = {
   sort?: 'latest' | 'oldest' | 'popular';
   limit?: number;
   enabled?: boolean;
+  following?: boolean; // New option to filter by followed users
 };
 
 // Standard query for assets (single page)
@@ -41,6 +43,7 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
   const {
     enabled: userEnabled = true,
     limit = 12,
+    following = false,
     ...queryOptions
   } = options;
 
@@ -51,6 +54,7 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
     tag: queryOptions.tag,
     search: queryOptions.search,
     sort: queryOptions.sort,
+    following, // Include in the query key
   });
 
   const query = useQuery<AssetsPage, Error>({
@@ -59,6 +63,7 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
       ...queryOptions,
       page: 1,
       limit,
+      following, // Pass to the API
     }),
     enabled: userEnabled,
   });
@@ -79,6 +84,7 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
         ...queryOptions,
         page: nextPage,
         limit,
+        following, // Pass to the API
       });
       
       // Manually update the cache with the combined results
@@ -99,11 +105,12 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
   };
 }
 
-// Infinite query for assets (paginated)
+// Infinite query for assets (paginated) - updated with following filter
 export function useInfiniteAssetsQuery(options: AssetQueryOptions = {}) {
   const {
     enabled: userEnabled = true,
     limit = 12,
+    following = false,
     ...queryOptions
   } = options;
 
@@ -114,6 +121,7 @@ export function useInfiniteAssetsQuery(options: AssetQueryOptions = {}) {
     tag: queryOptions.tag,
     search: queryOptions.search,
     sort: queryOptions.sort,
+    following, // Include in the query key
   });
 
   const query = useInfiniteQuery<AssetsPage, Error>({
@@ -122,6 +130,7 @@ export function useInfiniteAssetsQuery(options: AssetQueryOptions = {}) {
       ...queryOptions,
       page: pageParam,
       limit,
+      following, // Pass to the API
     }),
     getNextPageParam: (lastPage) => {
       const { page, totalPages } = lastPage.pagination;

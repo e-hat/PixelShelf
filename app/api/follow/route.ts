@@ -1,3 +1,5 @@
+// app/api/follow/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     // Check if the target user exists
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
+      select: { id: true, name: true, username: true }
     });
     
     if (!targetUser) {
@@ -89,14 +92,23 @@ export async function POST(req: NextRequest) {
     await prisma.notification.create({
       data: {
         type: 'FOLLOW',
-        content: `${session.user.name} started following you`,
+        content: `started following you`,
         linkUrl: `/u/${session.user.username}`,
         receiverId: targetUserId,
         senderId: session.user.id,
       },
     });
     
-    return NextResponse.json(follow, { status: 201 });
+    // Return the result with follower info
+    return NextResponse.json({
+      ...follow,
+      follower: {
+        id: session.user.id,
+        name: session.user.name,
+        username: session.user.username
+      },
+      following: targetUser
+    }, { status: 201 });
   } catch (error) {
     console.error('Error following user:', error);
     return NextResponse.json(
@@ -159,7 +171,10 @@ export async function DELETE(req: NextRequest) {
       },
     });
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      unfollowed: targetUserId
+    });
   } catch (error) {
     console.error('Error unfollowing user:', error);
     return NextResponse.json(

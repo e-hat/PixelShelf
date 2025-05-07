@@ -53,7 +53,8 @@ export interface DashboardFeedProps {
   selectedType?: string | null;
   onFilterChange?: (filters: AssetGridFilters) => void;
   showSearch?: boolean;
-  infiniteScroll?: boolean; // New prop to toggle infinite scrolling
+  infiniteScroll?: boolean;
+  emptyFollowingComponent?: React.ReactNode; // Custom empty state component
 }
 
 const DEFAULT_TABS: TabOption[] = [
@@ -81,7 +82,8 @@ export function DashboardFeed({
   selectedType = null,
   onFilterChange,
   showSearch = true,
-  infiniteScroll = true, // Default to infinite scrolling
+  infiniteScroll = true,
+  emptyFollowingComponent,
 }: DashboardFeedProps) {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -106,7 +108,7 @@ export function DashboardFeed({
     enabled: activeTab === 'trending' && infiniteScroll,
   });
 
-  // Following feed (infinite, only after sign-in)
+  // Following feed (infinite, only for authenticated users)
   const {
     data: followingInfiniteData,
     isLoading: isFollowingInfiniteLoading,
@@ -121,6 +123,7 @@ export function DashboardFeed({
     search: activeTab === 'following' ? searchQuery : undefined,
     tag: activeTab === 'following' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     type: activeTab === 'following' ? selectedType || undefined : undefined,
+    following: true, // Set to true to only show posts from followed users
     enabled: activeTab === 'following' && !!session && infiniteScroll,
   });
 
@@ -190,6 +193,7 @@ export function DashboardFeed({
     search: activeTab === 'following' ? searchQuery : undefined,
     tag: activeTab === 'following' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     type: activeTab === 'following' ? selectedType || undefined : undefined,
+    following: true, // Set to true to only show posts from followed users
     enabled: activeTab === 'following' && !!session && !infiniteScroll,
   });
 
@@ -470,6 +474,28 @@ export function DashboardFeed({
     exit: { opacity: 0, transition: { duration: 0.2 } }
   };
 
+  // Render custom empty following state or default one
+  const renderEmptyFollowingState = () => {
+    if (emptyFollowingComponent) {
+      return emptyFollowingComponent;
+    }
+    
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="bg-muted h-20 w-20 rounded-full flex items-center justify-center mb-4">
+          <UserCheck className="h-10 w-10 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No assets from creators you follow</h3>
+        <p className="text-muted-foreground mb-6">
+          Follow some creators to see their work in your feed
+        </p>
+        <Link href="/explore">
+          <Button variant="pixel">Discover Creators</Button>
+        </Link>
+      </div>
+    );
+  };
+
   return (
     <div className={cn('space-y-6', className)}>
       {title && (
@@ -577,7 +603,7 @@ export function DashboardFeed({
                 />
               ) : data.length === 0 ? (
                 tab.id === 'following' ? (
-                  <EmptyFollowingState />
+                  renderEmptyFollowingState()
                 ) : (
                   <EmptyState message={`No ${tab.label.toLowerCase()} found.`} />
                 )
@@ -778,24 +804,6 @@ function EmptyState({ message }: { message: string }) {
       <p className="text-muted-foreground mb-6">{message}</p>
       <Link href="/explore">
         <Button variant="pixel">Explore Assets</Button>
-      </Link>
-    </div>
-  );
-}
-
-// Empty following state component
-function EmptyFollowingState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mb-4">
-        <UserCheck className="h-8 w-8 text-muted-foreground" />
-      </div>
-      <h3 className="text-lg font-semibold mb-2">No assets from creators you follow</h3>
-      <p className="text-muted-foreground mb-6">
-        Follow some creators to see their work in your feed
-      </p>
-      <Link href="/explore">
-        <Button variant="pixel">Discover Creators</Button>
       </Link>
     </div>
   );

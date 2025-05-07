@@ -1,4 +1,5 @@
 // app/u/[username]/page.tsx
+
 'use client';
 
 import { useState, use } from 'react';
@@ -24,13 +25,14 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssetCard from '@/components/feature-specific/asset-card';
 import ProjectCard from '@/components/feature-specific/project-card';
+import { FollowersDialog } from '@/components/feature-specific/followers-dialog';
 import { formatDate } from '@/lib/utils';
 import { useUserProfileQuery, useFollowUserMutation, useUnfollowUserMutation } from '@/hooks/use-user-profile-query';
 import { useAssetsQuery } from '@/hooks/use-assets-query';
 import { useProjectsQuery } from '@/hooks/use-projects-query';
 import { useCreateChatMutation } from '@/hooks/use-chats-query';
 import { Asset, Project } from '@/types';
-import router from 'next/router';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 type Params = Promise<{ username: string }>;
@@ -40,14 +42,20 @@ export default function UserProfilePage({ params }: { params: Params }) {
   const { username } = use(params);
   
   const { data: session } = useSession();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"assets" | "projects">("assets");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // State for followers/following dialogs
+  const [followersDialogOpen, setFollowersDialogOpen] = useState(false);
+  const [followingDialogOpen, setFollowingDialogOpen] = useState(false);
   
   // Fetch user profile
   const {
     data: profile,
     isLoading: isLoadingProfile,
-    error: profileError
+    error: profileError,
+    refetch: refetchProfile
   } = useUserProfileQuery(username);
 
   // Fetch user assets
@@ -66,9 +74,9 @@ export default function UserProfilePage({ params }: { params: Params }) {
     isLoading: isLoadingProjects,
     error: projectsError
   } = useProjectsQuery({
-    userId:  profile?.id,
+    userId: profile?.id,
     enabled: !!profile
-});
+  });
 
   // Follow/unfollow mutations
   const followMutation = useFollowUserMutation();
@@ -88,9 +96,17 @@ export default function UserProfilePage({ params }: { params: Params }) {
     if (!profile) return;
     
     if (profile.isFollowing) {
-      unfollowMutation.mutate(profile.id);
+      unfollowMutation.mutate(profile.id, {
+        onSuccess: () => {
+          refetchProfile();
+        }
+      });
     } else {
-      followMutation.mutate(profile.id);
+      followMutation.mutate(profile.id, {
+        onSuccess: () => {
+          refetchProfile();
+        }
+      });
     }
   };
 
@@ -284,19 +300,29 @@ export default function UserProfilePage({ params }: { params: Params }) {
               </div>
 
               <div className="flex items-center space-x-4">
-                <div className="flex items-center">
+                {/* Followers count - clickable */}
+                <button 
+                  className="flex items-center hover:text-pixelshelf-primary transition-colors"
+                  onClick={() => setFollowersDialogOpen(true)}
+                >
                   <Users className="h-4 w-4 mr-1 text-muted-foreground" />
                   <span className="font-semibold mr-1">{profile.stats.followers}</span>
                   <span className="text-muted-foreground text-sm">
                     Followers
                   </span>
-                </div>
-                <div className="flex items-center">
+                </button>
+
+                {/* Following count - clickable */}
+                <button 
+                  className="flex items-center hover:text-pixelshelf-primary transition-colors"
+                  onClick={() => setFollowingDialogOpen(true)}
+                >
                   <span className="font-semibold mr-1">{profile.stats.following}</span>
                   <span className="text-muted-foreground text-sm">
                     Following
                   </span>
-                </div>
+                </button>
+
                 <div className="text-sm text-muted-foreground">
                   Joined {formatDate(profile.createdAt)}
                 </div>
@@ -304,6 +330,24 @@ export default function UserProfilePage({ params }: { params: Params }) {
             </div>
           </div>
         </div>
+
+        {/* Followers Dialog */}
+        <FollowersDialog
+          username={username}
+          open={followersDialogOpen}
+          onOpenChange={setFollowersDialogOpen}
+          type="followers"
+          initialCount={profile.stats.followers}
+        />
+
+        {/* Following Dialog */}
+        <FollowersDialog
+          username={username}
+          open={followingDialogOpen}
+          onOpenChange={setFollowingDialogOpen}
+          type="following"
+          initialCount={profile.stats.following}
+        />
 
         {/* Tabs */}
         <Tabs defaultValue="assets" className="mb-8">

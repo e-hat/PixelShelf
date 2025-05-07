@@ -280,6 +280,7 @@ export interface AssetQueryParams {
   tag?: string;
   search?: string;
   sort?: 'latest' | 'oldest' | 'popular';
+  following?: boolean;
 }
 
 export interface ProjectQueryParams {

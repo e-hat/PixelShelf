@@ -1,3 +1,4 @@
+// src/components/feature-specific/followers-dialog.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -6,9 +7,11 @@ import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { UserAvatar } from '@/components/feature-specific/user-avatar';
+import { UserAvatar } from '@/components/shared/user-avatar';
 import { api, ApiError } from '@/lib/api/api-client';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { userKeys } from '@/hooks/use-user-profile-query';
 
 interface User {
   id: string;
@@ -17,6 +20,8 @@ interface User {
   image: string | null;
   bio: string | null;
   followedAt: string;
+  isFollowing: boolean;
+  isCurrentUser: boolean;
 }
 
 interface FollowersDialogProps {
@@ -35,13 +40,13 @@ export function FollowersDialog({
   initialCount 
 }: FollowersDialogProps) {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [loadingFollow, setLoadingFollow] = useState<Record<string, boolean>>({});
   
   const fetchUsers = useCallback(async (resetUsers = false) => {
@@ -98,11 +103,36 @@ export function FollowersDialog({
     try {
       if (isFollowing) {
         await api.follow.unfollowUser(userId);
-        setFollowingMap(prev => ({ ...prev, [userId]: false }));
+        
+        // Update local state optimistically
+        setUsers(prev => 
+          prev.map(user => 
+            user.id === userId 
+              ? { ...user, isFollowing: false } 
+              : user
+          )
+        );
       } else {
         await api.follow.followUser(userId);
-        setFollowingMap(prev => ({ ...prev, [userId]: true }));
+        
+        // Update local state optimistically
+        setUsers(prev => 
+          prev.map(user => 
+            user.id === userId 
+              ? { ...user, isFollowing: true } 
+              : user
+          )
+        );
       }
+      
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: userKeys.profile(username) });
+      
+      // If we're modifying our own following list, also invalidate our own profile
+      if (session.user.username && type === 'following' && username === session.user.username) {
+        queryClient.invalidateQueries({ queryKey: userKeys.following(username) });
+      }
+      
     } catch (err) {
       console.error('Error toggling follow:', err);
       toast.error(
@@ -110,6 +140,9 @@ export function FollowersDialog({
           ? err.message 
           : 'Failed to update follow status'
       );
+      
+      // Revert the optimistic update on error
+      fetchUsers(true);
     } finally {
       setLoadingFollow(prev => ({ ...prev, [userId]: false }));
     }
@@ -119,26 +152,13 @@ export function FollowersDialog({
     if (open) {
       fetchUsers(true);
     }
-  }, [open, type, username, fetchUsers]);
+  }, [open, fetchUsers]);
   
   useEffect(() => {
     if (page > 1) {
       fetchUsers(false);
     }
   }, [page, fetchUsers]);
-  
-  useEffect(() => {
-    // Reset following state when users change
-    if (users.length > 0 && session) {
-      // Initialize with dummy data - in a real app, we'd fetch follow status
-      const initialMap: Record<string, boolean> = {};
-      users.forEach(user => {
-        // Assume not following for simplicity
-        initialMap[user.id] = false;
-      });
-      setFollowingMap(initialMap);
-    }
-  }, [users, session]);
   
   const title = type === 'followers' ? 'Followers' : 'Following';
   
@@ -181,24 +201,24 @@ export function FollowersDialog({
                   >
                     <UserAvatar user={user} size="md" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{user.name}</p>
+                      <p className="font-medium truncate">{user.name || user.username}</p>
                       <p className="text-sm text-muted-foreground truncate">
                         @{user.username}
                       </p>
                     </div>
                   </Link>
                   
-                  {session && session.user.id !== user.id && (
+                  {session && !user.isCurrentUser && (
                     <Button
-                      variant={followingMap[user.id] ? 'outline' : 'pixel'}
+                      variant={user.isFollowing ? "outline" : "pixel"}
                       size="sm"
                       className="ml-4 flex-shrink-0"
-                      onClick={() => handleFollowToggle(user.id, followingMap[user.id])}
+                      onClick={() => handleFollowToggle(user.id, user.isFollowing)}
                       disabled={loadingFollow[user.id]}
                     >
                       {loadingFollow[user.id] ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : followingMap[user.id] ? (
+                      ) : user.isFollowing ? (
                         'Following'
                       ) : (
                         'Follow'

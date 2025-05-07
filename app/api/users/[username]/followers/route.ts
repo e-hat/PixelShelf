@@ -2,6 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 
 type RouteParams = { username: string };
 type Props = { params: Promise<RouteParams> };
@@ -15,7 +17,7 @@ export async function GET(
 
   try {
     const url = new URL(req.url);
-    const page  = parseInt(url.searchParams.get('page')  || '1',  10);
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
     const limit = parseInt(url.searchParams.get('limit') || '10', 10);
 
     // Find the user by username
@@ -30,12 +32,16 @@ export async function GET(
       );
     }
 
+    // Get the current session to check follow status
+    const session = await getServerSession(authOptions);
+    const currentUserId = session?.user?.id;
+
     // Count total followers
     const totalCount = await prisma.follow.count({
       where: { followingId: user.id },
     });
 
-    // Fetch paginated followers
+    // Fetch paginated followers with additional info
     const followRows = await prisma.follow.findMany({
       where: { followingId: user.id },
       orderBy: { createdAt: 'desc' },
@@ -44,20 +50,43 @@ export async function GET(
       include: {
         follower: {
           select: {
-            id:       true,
-            name:     true,
+            id: true,
+            name: true,
             username: true,
-            image:    true,
-            bio:      true,
+            image: true,
+            bio: true,
           },
         },
       },
     });
 
-    // Format the follower objects
-    const followers = followRows.map((row: { follower: any; createdAt: any; }) => ({
+    // If logged in, check which users the current user follows
+    let followedByCurrentUser: Record<string, boolean> = {};
+    if (currentUserId) {
+      const userIds = followRows.map(row => row.follower.id);
+      const follows = await prisma.follow.findMany({
+        where: {
+          followerId: currentUserId,
+          followingId: { in: userIds },
+        },
+        select: {
+          followingId: true,
+        },
+      });
+      
+      // Create a lookup map of who the current user follows
+      followedByCurrentUser = follows.reduce((acc, follow) => {
+        acc[follow.followingId] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
+    }
+
+    // Format the follower objects with follow status
+    const followers = followRows.map(row => ({
       ...row.follower,
       followedAt: row.createdAt,
+      isFollowing: currentUserId ? followedByCurrentUser[row.follower.id] || false : false,
+      isCurrentUser: currentUserId === row.follower.id,
     }));
 
     return NextResponse.json({
