@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, RefObject } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -18,13 +18,21 @@ import {
   LayoutList,
   Users,
 } from 'lucide-react';
-import { useAssetsQuery } from '@/hooks/use-assets-query';
-import { useCreatorsQuery, useTrendingCreatorsQuery } from '@/hooks/use-creators-query';
+import { 
+  useAssetsQuery, 
+  useInfiniteAssetsQuery 
+} from '@/hooks/use-assets-query';
+import { 
+  useCreatorsQuery, 
+  useInfiniteCreatorsQuery, 
+  useTrendingCreatorsQuery 
+} from '@/hooks/use-creators-query';
 import { PAGINATION } from '@/constants';
 import { Asset, UserProfile } from '@/types';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import type { AssetGridFilters } from '@/components/shared/asset-grid';
+import { useIntersectionObserver } from '@/hooks/use-intersection-observer';
 
 export type TabOption = {
   id: string;
@@ -45,6 +53,7 @@ export interface DashboardFeedProps {
   selectedType?: string | null;
   onFilterChange?: (filters: AssetGridFilters) => void;
   showSearch?: boolean;
+  infiniteScroll?: boolean; // New prop to toggle infinite scrolling
 }
 
 const DEFAULT_TABS: TabOption[] = [
@@ -72,6 +81,7 @@ export function DashboardFeed({
   selectedType = null,
   onFilterChange,
   showSearch = true,
+  infiniteScroll = true, // Default to infinite scrolling
 }: DashboardFeedProps) {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -79,6 +89,76 @@ export function DashboardFeed({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Trending feed (infinite)
+  const {
+    data: trendingInfiniteData,
+    isLoading: isTrendingInfiniteLoading,
+    error: trendingInfiniteError,
+    hasNextPage: trendingHasNextPage,
+    isFetchingNextPage: isTrendingFetchingNextPage,
+    fetchNextPage: fetchNextTrendingPage,
+    refetch: reloadTrendingInfinite,
+  } = useInfiniteAssetsQuery({
+    sort: 'popular',
+    limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'trending' ? searchQuery : undefined,
+    tag: activeTab === 'trending' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'trending' ? selectedType || undefined : undefined,
+    enabled: activeTab === 'trending' && infiniteScroll,
+  });
+
+  // Following feed (infinite, only after sign-in)
+  const {
+    data: followingInfiniteData,
+    isLoading: isFollowingInfiniteLoading,
+    error: followingInfiniteError,
+    hasNextPage: followingHasNextPage,
+    isFetchingNextPage: isFollowingFetchingNextPage,
+    fetchNextPage: fetchNextFollowingPage,
+    refetch: reloadFollowingInfinite,
+  } = useInfiniteAssetsQuery({
+    sort: 'latest',
+    limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'following' ? searchQuery : undefined,
+    tag: activeTab === 'following' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'following' ? selectedType || undefined : undefined,
+    enabled: activeTab === 'following' && !!session && infiniteScroll,
+  });
+
+  // Assets feed (for explore page)
+  const {
+    data: assetsInfiniteData,
+    isLoading: isAssetsInfiniteLoading,
+    error: assetsInfiniteError,
+    hasNextPage: assetsHasNextPage,
+    isFetchingNextPage: isAssetsInfiniteFetchingNextPage,
+    fetchNextPage: fetchNextAssetsPage,
+    refetch: reloadAssetsInfinite,
+  } = useInfiniteAssetsQuery({
+    sort: 'latest',
+    limit: PAGINATION.DEFAULT_LIMIT,
+    search: activeTab === 'assets' ? searchQuery : undefined,
+    tag: activeTab === 'assets' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    type: activeTab === 'assets' ? selectedType || undefined : undefined,
+    enabled: activeTab === 'assets' && infiniteScroll,
+  });
+  
+  // Creators feed (infinite, for explore page)
+  const {
+    data: creatorsInfiniteData,
+    isLoading: isCreatorsInfiniteLoading,
+    error: creatorsInfiniteError,
+    hasNextPage: creatorsHasNextPage,
+    isFetchingNextPage: isCreatorsInfiniteFetchingNextPage,
+    fetchNextPage: fetchNextCreatorsPage,
+    refetch: reloadCreatorsInfinite,
+  } = useInfiniteCreatorsQuery({
+    search: activeTab === 'creators' ? searchQuery : undefined,
+    tag: activeTab === 'creators' && selectedTags.length > 0 ? selectedTags[0] : undefined,
+    sort: 'popular', // Default to popular for creators
+    enabled: activeTab === 'creators' && infiniteScroll,
+  });
+
+  // Non-infinite queries (as fallback or when infiniteScroll is disabled)
   const {
     assets: trendingAssets,
     isLoading: isTrendingLoading,
@@ -93,9 +173,9 @@ export function DashboardFeed({
     search: activeTab === 'trending' ? searchQuery : undefined,
     tag: activeTab === 'trending' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     type: activeTab === 'trending' ? selectedType || undefined : undefined,
+    enabled: activeTab === 'trending' && !infiniteScroll,
   });
 
-  // Following feed (infinite, only after sign-in)
   const {
     assets: followingAssets,
     isLoading: isFollowingLoading,
@@ -110,10 +190,9 @@ export function DashboardFeed({
     search: activeTab === 'following' ? searchQuery : undefined,
     tag: activeTab === 'following' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     type: activeTab === 'following' ? selectedType || undefined : undefined,
-    enabled: !!session,
+    enabled: activeTab === 'following' && !!session && !infiniteScroll,
   });
 
-  // Assets feed (for explore page)
   const {
     assets: assetsData,
     isLoading: isAssetsLoading,
@@ -128,10 +207,9 @@ export function DashboardFeed({
     search: activeTab === 'assets' ? searchQuery : undefined,
     tag: activeTab === 'assets' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     type: activeTab === 'assets' ? selectedType || undefined : undefined,
-    enabled: activeTab === 'assets',
+    enabled: activeTab === 'assets' && !infiniteScroll,
   });
-
-  // Creators feed (for explore page) - Using real data now
+  
   const {
     creators,
     isLoading: isCreatorsLoading,
@@ -144,8 +222,26 @@ export function DashboardFeed({
     search: activeTab === 'creators' ? searchQuery : undefined,
     tag: activeTab === 'creators' && selectedTags.length > 0 ? selectedTags[0] : undefined,
     sort: 'popular', // Default to popular for creators
-    enabled: activeTab === 'creators',
+    enabled: activeTab === 'creators' && !infiniteScroll,
   });
+
+  // Create flattened arrays of assets from infinite query pages
+  const trendingInfiniteAssets = trendingInfiniteData
+    ? trendingInfiniteData.pages.flatMap(page => page.assets)
+    : [];
+  
+  const followingInfiniteAssets = followingInfiniteData
+    ? followingInfiniteData.pages.flatMap(page => page.assets)
+    : [];
+  
+  const assetsInfiniteAssets = assetsInfiniteData
+    ? assetsInfiniteData.pages.flatMap(page => page.assets)
+    : [];
+    
+  // Create flattened array of creators from infinite query pages
+  const creatorsInfiniteItems = creatorsInfiniteData
+    ? creatorsInfiniteData.pages.flatMap(page => page.users)
+    : [];
   
   // Tab switch handler
   const handleTabChange = (tab: string) => {
@@ -158,79 +254,202 @@ export function DashboardFeed({
     try {
       switch (activeTab) {
         case 'trending':
-          await reloadTrending();
+          if (infiniteScroll) {
+            await reloadTrendingInfinite();
+          } else {
+            await reloadTrending();
+          }
           break;
         case 'following':
-          await reloadFollowing();
+          if (infiniteScroll) {
+            await reloadFollowingInfinite();
+          } else {
+            await reloadFollowing();
+          }
           break;
         case 'assets':
-          await reloadAssets();
+          if (infiniteScroll) {
+            await reloadAssetsInfinite();
+          } else {
+            await reloadAssets();
+          }
           break;
         case 'creators':
-          await reloadCreators();
-          break;
+          if (infiniteScroll) {
+            await reloadCreatorsInfinite();
+          } else {
+            await reloadCreators();
+          }
         default:
-          await reloadTrending();
+          if (infiniteScroll) {
+            await reloadTrendingInfinite();
+          } else {
+            await reloadTrending();
+          }
       }
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
-  // Get the right data for the active tab
-  const getTabData = () => {
+  // Fetch more data for infinite scrolling
+  const fetchMoreForCurrentTab = useCallback(() => {
     switch (activeTab) {
       case 'trending':
-        return {
-          data: trendingAssets,
-          isLoading: isTrendingLoading,
-          error: trendingError,
-          hasMore: trendingHasMore,
-          isLoadingMore: isTrendingLoadingMore,
-          loadMore: loadMoreTrending,
-          reload: reloadTrending,
-        };
+        if (trendingHasNextPage && !isTrendingFetchingNextPage) {
+          fetchNextTrendingPage();
+        }
+        break;
       case 'following':
-        return {
-          data: followingAssets,
-          isLoading: isFollowingLoading,
-          error: followingError,
-          hasMore: followingHasMore,
-          isLoadingMore: isFollowingLoadingMore,
-          loadMore: loadMoreFollowing,
-          reload: reloadFollowing,
-        };
+        if (followingHasNextPage && !isFollowingFetchingNextPage) {
+          fetchNextFollowingPage();
+        }
+        break;
       case 'assets':
-        return {
-          data: assetsData,
-          isLoading: isAssetsLoading,
-          error: assetsError,
-          hasMore: assetsHasMore,
-          isLoadingMore: isAssetsLoadingMore,
-          loadMore: loadMoreAssets,
-          reload: reloadAssets,
-        };
+        if (assetsHasNextPage && !isAssetsInfiniteFetchingNextPage) {
+          fetchNextAssetsPage();
+        }
+        break;
       case 'creators':
-        return {
-          data: creators,
-          isLoading: isCreatorsLoading,
-          error: creatorsError,
-          hasMore: creatorsHasMore,
-          isLoadingMore: isCreatorsLoadingMore,
-          loadMore: loadMoreCreators,
-          reload: reloadCreators,
-          type: 'creator', // Type flag to identify creators data
-        };
+        if (creatorsHasNextPage && !isCreatorsInfiniteFetchingNextPage) {
+          fetchNextCreatorsPage();
+        }
+        break;
       default:
-        return {
-          data: trendingAssets,
-          isLoading: isTrendingLoading,
-          error: trendingError,
-          hasMore: trendingHasMore,
-          isLoadingMore: isTrendingLoadingMore,
-          loadMore: loadMoreTrending,
-          reload: reloadTrending,
-        };
+        break;
+    }
+  }, [
+    activeTab,
+    trendingHasNextPage,
+    isTrendingFetchingNextPage,
+    fetchNextTrendingPage,
+    followingHasNextPage,
+    isFollowingFetchingNextPage,
+    fetchNextFollowingPage,
+    assetsHasNextPage,
+    isAssetsInfiniteFetchingNextPage,
+    fetchNextAssetsPage,
+    creatorsHasNextPage,
+    isCreatorsInfiniteFetchingNextPage,
+    fetchNextCreatorsPage,
+  ]);
+
+  // Set up intersection observer for infinite scrolling
+  const { ref: loadMoreRef, isIntersecting } = useIntersectionObserver({
+    // Using a larger rootMargin to start loading before user reaches the very bottom
+    rootMargin: '300px',
+    // Only enable when infinite scrolling is turned on
+    enabled: infiniteScroll,
+  });
+
+  // Load more data when the observer detects the user has scrolled to the load more element
+  useEffect(() => {
+    if (isIntersecting && infiniteScroll) {
+      fetchMoreForCurrentTab();
+    }
+  }, [isIntersecting, fetchMoreForCurrentTab, infiniteScroll]);
+
+  // Get the right data for the active tab
+  const getTabData = () => {
+    if (infiniteScroll) {
+      switch (activeTab) {
+        case 'trending':
+          return {
+            data: trendingInfiniteAssets,
+            isLoading: isTrendingInfiniteLoading,
+            error: trendingInfiniteError,
+            hasMore: trendingHasNextPage,
+            isLoadingMore: isTrendingFetchingNextPage,
+            loadMore: fetchNextTrendingPage,
+          };
+        case 'following':
+          return {
+            data: followingInfiniteAssets,
+            isLoading: isFollowingInfiniteLoading,
+            error: followingInfiniteError,
+            hasMore: followingHasNextPage,
+            isLoadingMore: isFollowingFetchingNextPage,
+            loadMore: fetchNextFollowingPage,
+          };
+        case 'assets':
+          return {
+            data: assetsInfiniteAssets,
+            isLoading: isAssetsInfiniteLoading,
+            error: assetsInfiniteError,
+            hasMore: assetsHasNextPage,
+            isLoadingMore: isAssetsInfiniteFetchingNextPage,
+            loadMore: fetchNextAssetsPage,
+          };
+        case 'creators':
+          return {
+            data: creatorsInfiniteItems,
+            isLoading: isCreatorsInfiniteLoading,
+            error: creatorsInfiniteError,
+            hasMore: creatorsHasNextPage,
+            isLoadingMore: isCreatorsInfiniteFetchingNextPage,
+            loadMore: fetchNextCreatorsPage,
+            type: 'creator', // Type flag to identify creators data
+          };
+        default:
+          return {
+            data: trendingInfiniteAssets,
+            isLoading: isTrendingInfiniteLoading,
+            error: trendingInfiniteError,
+            hasMore: trendingHasNextPage,
+            isLoadingMore: isTrendingFetchingNextPage,
+            loadMore: fetchNextTrendingPage,
+          };
+      }
+    } else {
+      // Non-infinite scrolling data
+      switch (activeTab) {
+        case 'trending':
+          return {
+            data: trendingAssets,
+            isLoading: isTrendingLoading,
+            error: trendingError,
+            hasMore: trendingHasMore,
+            isLoadingMore: isTrendingLoadingMore,
+            loadMore: loadMoreTrending,
+          };
+        case 'following':
+          return {
+            data: followingAssets,
+            isLoading: isFollowingLoading,
+            error: followingError,
+            hasMore: followingHasMore,
+            isLoadingMore: isFollowingLoadingMore,
+            loadMore: loadMoreFollowing,
+          };
+        case 'assets':
+          return {
+            data: assetsData,
+            isLoading: isAssetsLoading,
+            error: assetsError,
+            hasMore: assetsHasMore,
+            isLoadingMore: isAssetsLoadingMore,
+            loadMore: loadMoreAssets,
+          };
+        case 'creators':
+          return {
+            data: creators,
+            isLoading: isCreatorsLoading,
+            error: creatorsError,
+            hasMore: creatorsHasMore,
+            isLoadingMore: isCreatorsLoadingMore,
+            loadMore: loadMoreCreators,
+            type: 'creator', // Type flag to identify creators data
+          };
+        default:
+          return {
+            data: trendingAssets,
+            isLoading: isTrendingLoading,
+            error: trendingError,
+            hasMore: trendingHasMore,
+            isLoadingMore: isTrendingLoadingMore,
+            loadMore: loadMoreTrending,
+          };
+      }
     }
   };
 
@@ -322,15 +541,18 @@ export function DashboardFeed({
               <SignInPrompt />
             ) : tab.id === 'creators' ? (
               /* Creators Tab Content */
-              isCreatorsLoading ? (
+              isLoading ? (
                 <LoadingState type="creator" />
-              ) : creatorsError ? (
-                <ErrorState error={creatorsError.message || "Failed to load creators"} onRetry={reloadCreators} />
-              ) : creators.length === 0 ? (
+              ) : error ? (
+                <ErrorState 
+                  error={error instanceof Error ? error.message : "Failed to load creators"} 
+                  onRetry={refreshFeed} 
+                />
+              ) : data.length === 0 ? (
                 <EmptyState message="No creators found." />
               ) : (
                 <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-                  {creators.map((creator: UserProfile, index: number) => (
+                  {data.map((creator: UserProfile, index: number) => (
                     <motion.div
                       key={creator.id}
                       variants={itemVariants}
@@ -349,7 +571,10 @@ export function DashboardFeed({
               isLoading ? (
                 <LoadingState type="asset" />
               ) : error ? (
-                <ErrorState error={error.message || "Failed to load assets"} onRetry={refreshFeed} />
+                <ErrorState 
+                  error={error instanceof Error ? error.message : "Failed to load assets"} 
+                  onRetry={refreshFeed} 
+                />
               ) : data.length === 0 ? (
                 tab.id === 'following' ? (
                   <EmptyFollowingState />
@@ -378,23 +603,32 @@ export function DashboardFeed({
                     ))}
                   </div>
                   
-                  {/* Load More Button */}
+                  {/* Intersection Observer Target - This will trigger loading more content */}
                   {hasMore && (
-                    <div className="flex justify-center mt-8">
-                      <Button
-                        variant="outline"
-                        onClick={loadMore}
-                        disabled={isLoadingMore}
-                      >
-                        {isLoadingMore ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          'Load More'
-                        )}
-                      </Button>
+                    <div
+                      ref={loadMoreRef as RefObject<HTMLDivElement>}
+                      className="w-full flex justify-center py-8"
+                    >
+                      {infiniteScroll ? (
+                        isLoadingMore && (
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        )
+                      ) : (
+                        <Button
+                          variant="outline"
+                          onClick={() => loadMore()}
+                          disabled={isLoadingMore}
+                        >
+                          {isLoadingMore ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            'Load More'
+                          )}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </>

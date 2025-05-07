@@ -30,6 +30,7 @@ export default function HomeFeed() {
       <DashboardFeed 
         initialTab="trending" 
         tabs={homeTabs}
+        infiniteScroll={true}
       />
     </div>
   );

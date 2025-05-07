@@ -1,7 +1,7 @@
 // src/components/shared/asset-grid.tsx
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, RefObject } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Masonry from 'react-responsive-masonry';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ASSET_TYPES } from '@/constants';
+import { useIntersectionObserver } from '@/hooks/use-intersection-observer';
 
 interface AssetGridProps {
   assets: Asset[];
@@ -32,6 +33,7 @@ interface AssetGridProps {
   className?: string;
   onFilterChange?: (filters: AssetGridFilters) => void;
   variant?: AssetViewMode | 'grid' | 'list';
+  infiniteScroll?: boolean; // New prop to toggle infinite scrolling
 }
 
 export interface AssetGridFilters {
@@ -52,6 +54,7 @@ export function AssetGrid({
   className,
   onFilterChange,
   variant,
+  infiniteScroll = true, // Default to infinite scrolling
 }: AssetGridProps) {
   // Get view mode from store for persistence
   const preferences = useAppStore((state) => state.preferences);
@@ -86,6 +89,19 @@ export function AssetGrid({
       setAvailableTags(Array.from(tags).sort());
     }
   }, [assets]);
+
+  // Setup intersection observer for infinite scrolling
+  const { ref: loadMoreRef, isIntersecting } = useIntersectionObserver({
+    rootMargin: '300px', // Load more when user gets within 300px of the bottom
+    enabled: infiniteScroll && !!hasMore && !isLoadingMore,
+  });
+
+  // Load more data when the intersection observer detects we're near the bottom
+  useEffect(() => {
+    if (isIntersecting && infiniteScroll && hasMore && onLoadMore && !isLoadingMore) {
+      onLoadMore();
+    }
+  }, [isIntersecting, infiniteScroll, hasMore, onLoadMore, isLoadingMore]);
 
   // Handle view mode toggle
   const toggleViewMode = () => {
@@ -399,23 +415,32 @@ export function AssetGrid({
         </div>
       )}
 
-      {/* Load more button */}
-      {hasMore && onLoadMore && (
-        <div className="flex justify-center mt-8">
-          <Button
-            variant="outline"
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-          >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
+      {/* Infinite scroll loading indicator or load more button */}
+      {hasMore && (
+        <div 
+          ref={loadMoreRef as RefObject<HTMLDivElement>}
+          className="flex justify-center mt-8 py-6"
+        >
+          {infiniteScroll ? (
+            isLoadingMore && (
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            )
+          ) : (
+            <Button
+              variant="outline"
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Load More'
+              )}
+            </Button>
+          )}
         </div>
       )}
     </div>

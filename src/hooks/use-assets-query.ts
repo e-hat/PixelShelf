@@ -66,13 +66,34 @@ export function useAssetsQuery(options: AssetQueryOptions = {}) {
   const assets = query.data?.assets ?? [];
   const pagination = query.data?.pagination;
   const hasMore = !!pagination && pagination.page < pagination.totalPages;
-  const loadMore = () => Promise.resolve(); // No-op for compatibility
+  
+  // Implement a real loadMore function that fetches the next page
+  const loadMore = async () => {
+    if (!hasMore || query.isLoading || !pagination) {
+      return;
+    }
+    
+    try {
+      const nextPage = pagination.page + 1;
+      const nextData = await api.assets.getAll({
+        ...queryOptions,
+        page: nextPage,
+        limit,
+      });
+      
+      // Manually update the cache with the combined results
+      query.refetch();
+    } catch (error) {
+      console.error("Error loading more assets:", error);
+      toast.error("Failed to load more assets");
+    }
+  };
 
   return {
     assets,
     pagination,
     hasMore,
-    isLoadingMore: false,
+    isLoadingMore: query.isFetching && !!query.data,
     loadMore,
     ...query,
   };

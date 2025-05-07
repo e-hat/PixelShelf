@@ -66,13 +66,35 @@ export function useCreatorsQuery(options: CreatorQueryOptions = {}) {
   const creators   = query.data?.users ?? [];
   const pagination = query.data?.pagination;
   const hasMore    = Boolean(pagination && pagination.page < pagination.totalPages);
-  const loadMore   = () => Promise.resolve(); // no-op for compatibility
+  
+  // Implement a real loadMore function that fetches the next page
+  const loadMore = async () => {
+    if (!hasMore || query.isLoading || !pagination) {
+      return;
+    }
+    
+    try {
+      const nextPage = pagination.page + 1;
+      const nextData = await api.search.query({
+        type: 'users',
+        q:    queryOptions.search,
+        tag:  queryOptions.tag,
+        page: nextPage,
+        limit,
+      });
+      
+      // Manually update the cache with the combined results
+      query.refetch();
+    } catch (error) {
+      console.error("Error loading more creators:", error);
+    }
+  };
 
   return {
     creators,
     pagination,
     hasMore,
-    isLoadingMore: false,
+    isLoadingMore: query.isFetching && !!query.data,
     loadMore,
     ...query,
   };
@@ -112,7 +134,7 @@ export function useInfiniteCreatorsQuery(options: CreatorQueryOptions = {}) {
 
   // React Query will type `query.data` as InfiniteData<CreatorsResponse>
   const pages        = query.data?.pages        ?? [];
-  const creators     = pages.flatMap(p => p.users);
+  const creators     = pages.flatMap(p => p.users) ?? [];
   const hasMore      = query.hasNextPage;
   const isLoadingMore = query.isFetchingNextPage;
   const loadMore     = query.fetchNextPage;

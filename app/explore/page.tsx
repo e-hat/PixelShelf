@@ -233,6 +233,7 @@ export default function ExplorePage() {
           selectedType={selectedType}
           onFilterChange={handleFilterChange}
           showSearch={false} // Hide duplicate search in DashboardFeed
+          infiniteScroll={true}
         />
       </div>
     </div>
