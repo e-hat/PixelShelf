@@ -1,7 +1,7 @@
 // src/components/shared/asset-grid.tsx
 'use client';
 
-import { useState, useEffect, useMemo, RefObject } from 'react';
+import { useState, useEffect, useMemo, RefObject, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Masonry from 'react-responsive-masonry';
 import { Button } from '@/components/ui/button';
@@ -91,17 +91,18 @@ export function AssetGrid({
   }, [assets]);
 
   // Setup intersection observer for infinite scrolling
-  const { ref: loadMoreRef, isIntersecting } = useIntersectionObserver({
-    rootMargin: '300px', // Load more when user gets within 300px of the bottom
-    enabled: infiniteScroll && !!hasMore && !isLoadingMore,
-  });
-
-  // Load more data when the intersection observer detects we're near the bottom
-  useEffect(() => {
-    if (isIntersecting && infiniteScroll && hasMore && onLoadMore && !isLoadingMore) {
+  const fetchMoreContent = useCallback(() => {
+    if (hasMore && onLoadMore && !isLoadingMore) {
       onLoadMore();
     }
-  }, [isIntersecting, infiniteScroll, hasMore, onLoadMore, isLoadingMore]);
+  }, [hasMore, onLoadMore, isLoadingMore]);
+  
+  const { ref: loadMoreRef } = useIntersectionObserver({
+    rootMargin: '500px', // Increase to load content earlier
+    enabled: infiniteScroll && !!hasMore,
+    onIntersect: fetchMoreContent,
+    skip: isLoadingMore,
+  });
 
   // Handle view mode toggle
   const toggleViewMode = () => {
@@ -418,17 +419,21 @@ export function AssetGrid({
       {/* Infinite scroll loading indicator or load more button */}
       {hasMore && (
         <div 
-          ref={loadMoreRef as RefObject<HTMLDivElement>}
-          className="flex justify-center mt-8 py-6"
+          ref={loadMoreRef}
+          className="w-full flex justify-center py-8"
+          style={{ minHeight: '100px' }} // Ensure element has height
         >
           {infiniteScroll ? (
             isLoadingMore && (
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex flex-col items-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground mt-2">Loading more...</span>
+              </div>
             )
           ) : (
             <Button
               variant="outline"
-              onClick={onLoadMore}
+              onClick={() => onLoadMore?.()}
               disabled={isLoadingMore}
             >
               {isLoadingMore ? (
@@ -441,6 +446,12 @@ export function AssetGrid({
               )}
             </Button>
           )}
+        </div>
+      )}
+
+      {!hasMore && !isLoading && assets.length > 0 && (
+        <div className="w-full flex justify-center py-8 text-muted-foreground text-sm">
+          You've reached the end
         </div>
       )}
     </div>

@@ -11,6 +11,7 @@ import {
 import { api } from '@/lib/api/api-client';
 import { Asset, AssetFormValues } from '@/types';
 import { toast } from 'sonner';
+import { useCallback, useState } from 'react';
 
 // Keys for assets queries
 export const assetKeys = {
@@ -215,4 +216,53 @@ export function useDeleteAssetMutation() {
       toast.error(error.message || 'Failed to delete asset');
     },
   });
+}
+
+export function useEnhancedInfiniteAssetsQuery(options: AssetQueryOptions = {}) {
+  const {
+    enabled: userEnabled = true,
+    limit = 12,
+    following = false,
+    ...queryOptions
+  } = options;
+
+  // Base infinite query
+  const infiniteQuery = useInfiniteAssetsQuery({
+    ...options,
+    enabled: userEnabled,
+  });
+  
+  // Add loading state tracking
+  const [isManuallyFetching, setIsManuallyFetching] = useState(false);
+  
+  // Enhanced fetchNextPage function with error handling and loading state
+  const fetchNextPage = useCallback(async () => {
+    if (!infiniteQuery.hasNextPage || infiniteQuery.isFetchingNextPage || isManuallyFetching) {
+      return;
+    }
+    
+    try {
+      setIsManuallyFetching(true);
+      await infiniteQuery.fetchNextPage();
+    } catch (error) {
+      console.error("Error fetching next page:", error);
+      // Consider adding toast notification here
+    } finally {
+      setIsManuallyFetching(false);
+    }
+  }, [
+    infiniteQuery.hasNextPage,
+    infiniteQuery.isFetchingNextPage,
+    infiniteQuery.fetchNextPage,
+    isManuallyFetching
+  ]);
+  
+  // Determine if loading more content
+  const isLoadingMore = infiniteQuery.isFetchingNextPage || isManuallyFetching;
+  
+  return {
+    ...infiniteQuery,
+    isLoadingMore,
+    fetchNextPage,
+  };
 }

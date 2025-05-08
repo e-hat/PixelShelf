@@ -338,21 +338,6 @@ export function DashboardFeed({
     fetchNextCreatorsPage,
   ]);
 
-  // Set up intersection observer for infinite scrolling
-  const { ref: loadMoreRef, isIntersecting } = useIntersectionObserver({
-    // Using a larger rootMargin to start loading before user reaches the very bottom
-    rootMargin: '300px',
-    // Only enable when infinite scrolling is turned on
-    enabled: infiniteScroll,
-  });
-
-  // Load more data when the observer detects the user has scrolled to the load more element
-  useEffect(() => {
-    if (isIntersecting && infiniteScroll) {
-      fetchMoreForCurrentTab();
-    }
-  }, [isIntersecting, fetchMoreForCurrentTab, infiniteScroll]);
-
   // Get the right data for the active tab
   const getTabData = () => {
     if (infiniteScroll) {
@@ -458,6 +443,20 @@ export function DashboardFeed({
   };
 
   const { data, isLoading, error, hasMore, isLoadingMore, loadMore, type } = getTabData();
+
+  // Set up intersection observer for infinite scrolling
+  const fetchNextPage = useCallback(() => {
+    if (hasMore && !isLoadingMore) {
+      fetchMoreForCurrentTab();
+    }
+  }, [hasMore, isLoadingMore, fetchMoreForCurrentTab]);
+  
+  const { ref: loadMoreRef } = useIntersectionObserver({
+    rootMargin: '500px', // Increased to start loading earlier
+    enabled: infiniteScroll,
+    onIntersect: fetchNextPage,
+    skip: isLoadingMore, // Skip triggering while already loading
+  });
 
   // Animation variants for grid items
   const itemVariants = {
@@ -631,13 +630,17 @@ export function DashboardFeed({
                   
                   {/* Intersection Observer Target - This will trigger loading more content */}
                   {hasMore && (
-                    <div
-                      ref={loadMoreRef as RefObject<HTMLDivElement>}
+                    <div 
+                      ref={loadMoreRef}
                       className="w-full flex justify-center py-8"
+                      style={{ minHeight: '100px' }} // Ensure element has minimum height for visibility
                     >
                       {infiniteScroll ? (
                         isLoadingMore && (
-                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          <div className="flex flex-col items-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground mt-2">Loading more content...</span>
+                          </div>
                         )
                       ) : (
                         <Button
@@ -655,6 +658,12 @@ export function DashboardFeed({
                           )}
                         </Button>
                       )}
+                    </div>
+                  )}
+
+                  {!hasMore && !isLoading && data.length > 0 && (
+                    <div className="w-full flex justify-center py-8 text-muted-foreground text-sm">
+                      You've reached the end... post something!
                     </div>
                   )}
                 </>
