@@ -137,6 +137,154 @@
   grid-auto-flow: dense;
 }
 
+/* Custom layout for home feed with sidecards */
+.home-feed-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-gap: 24px;
+  margin-top: 24px;
+}
+
+@media (min-width: 1024px) {
+  .home-feed-layout {
+    grid-template-columns: 300px 1fr 300px;
+    align-items: start; /* Align items to the top */
+  }
+  
+  .home-feed-main {
+    max-width: 680px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  
+  /* Sidebar flows naturally with the page - no sticky positioning */
+  .home-feed-sidebar {
+    padding-right: 8px;
+  }
+  
+  /* When in grid view, make the main content full-width */
+  .home-feed-layout.hide-sidecards {
+    grid-template-columns: 1fr;
+  }
+  
+  .home-feed-layout.hide-sidecards .home-feed-main {
+    max-width: 100%;
+  }
+}
+
+/* For grid view with 4 items per row */
+.grid.grid-cols-4 {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .grid.grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .grid.grid-cols-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid.grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Add some spacing between rows */
+.grid > * {
+  margin-bottom: 1rem;
+}
+
+/* Custom grid for single-column feed */
+.grid-single-feed {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 600px;
+  margin: 0 auto;
+  grid-gap: 16px;
+}
+
+.sidebar-card {
+  background-color: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sidebar-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Animate sidecards sliding in and out */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-out-left {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-100%); opacity: 0; }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Show sidecards animations */
+.home-feed-layout.show-sidecards .left-sidebar {
+  animation: slide-in-left 0.3s ease forwards;
+  display: block;
+}
+
+.home-feed-layout.show-sidecards .right-sidebar {
+  animation: slide-in-right 0.3s ease forwards;
+  display: block;
+}
+
+/* Hide sidecards animations */
+.home-feed-layout.hide-sidecards .left-sidebar {
+  animation: slide-out-left 0.3s ease forwards;
+}
+
+.home-feed-layout.hide-sidecards .right-sidebar {
+  animation: slide-out-right 0.3s ease forwards;
+}
+
+/* After animation completes, hide sidecards completely */
+.home-feed-layout.hide-sidecards .home-feed-sidebar {
+  animation-fill-mode: forwards;
+}
+
+/* Make sure sidecards are hidden after animation completes */
+@media (min-width: 1024px) {
+  .home-feed-layout.hide-sidecards .home-feed-sidebar {
+    display: none;
+    animation-fill-mode: forwards;
+  }
+}
+
+/* Transition for grid layout changes */
+.home-feed-main {
+  transition: max-width 0.3s ease;
+}
+
 .aspect-game-card {
   aspect-ratio: 16 / 10;
 }

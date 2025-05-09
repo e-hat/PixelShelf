@@ -170,6 +170,25 @@ export const api = {
       }
       return apiClient.get(`/api/users?${searchParams.toString()}`);
     },
+    // New method following the same patterns as existing ones
+    getTrendingCreators: (limit: number = 5) => {
+      const searchParams = new URLSearchParams();
+      searchParams.append('type', 'users');
+      searchParams.append('sort', 'popular');
+      searchParams.append('limit', String(limit));
+      return apiClient.get(`/api/search?${searchParams.toString()}`);
+    }
+  },
+
+  // Trending
+  trending: {
+    getAll: async (params?: { type?: 'assets' | 'creators' | 'projects' | 'all'; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.type) searchParams.append('type', params.type);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    
+    return apiClient.get(`/api/trending?${searchParams.toString()}`);
+  }
   },
 
   // Follow

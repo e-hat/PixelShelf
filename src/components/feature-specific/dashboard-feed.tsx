@@ -54,7 +54,12 @@ export interface DashboardFeedProps {
   onFilterChange?: (filters: AssetGridFilters) => void;
   showSearch?: boolean;
   infiniteScroll?: boolean;
-  emptyFollowingComponent?: React.ReactNode; // Custom empty state component
+  emptyFollowingComponent?: React.ReactNode;
+  itemsPerRow?: number; // Prop for controlling layout
+  showSidecards?: boolean; // Prop to toggle sidecards visibility
+  defaultViewMode?: 'grid' | 'list'; // Default view mode
+  listViewFirst?: boolean; // Control order of view buttons
+  onViewModeChange?: (mode: 'grid' | 'list') => void; // Callback for view mode changes
 }
 
 const DEFAULT_TABS: TabOption[] = [
@@ -84,11 +89,32 @@ export function DashboardFeed({
   showSearch = true,
   infiniteScroll = true,
   emptyFollowingComponent,
+  itemsPerRow = 4, // Default to 4 items per row
+  showSidecards = false, // Default to not showing sidecards
+  defaultViewMode = 'grid', // Default view mode
+  listViewFirst = false, // Default to grid view first
+  onViewModeChange, // Callback for view mode changes
 }: DashboardFeedProps) {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(defaultViewMode);
+  
+  // State for dynamic item count when toggling view mode
+  const [currentItemsPerRow, setCurrentItemsPerRow] = useState(itemsPerRow);
+  const [showCurrentSidecards, setShowCurrentSidecards] = useState(showSidecards);
+
+  // Initialize viewMode and related states from props
+  useEffect(() => {
+    setViewMode(defaultViewMode);
+    if (defaultViewMode === 'list' && showSidecards) {
+      setCurrentItemsPerRow(1);
+      setShowCurrentSidecards(true);
+    } else if (defaultViewMode === 'grid' && !showSidecards) {
+      setCurrentItemsPerRow(itemsPerRow);
+      setShowCurrentSidecards(false);
+    }
+  }, [defaultViewMode, itemsPerRow, showSidecards]);
 
   // Trending feed (infinite)
   const {
@@ -296,6 +322,29 @@ export function DashboardFeed({
     }
   };
 
+  // Handle view mode changes
+  const handleViewModeChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    
+    // Special handling for home feed (when showSidecards is enabled)
+    if (showSidecards) {
+      if (mode === 'list') {
+        // List view: single column with sidecards
+        setCurrentItemsPerRow(1);
+        setShowCurrentSidecards(true);
+      } else {
+        // Grid view: multiple columns without sidecards
+        setCurrentItemsPerRow(4); // Default to 4 for grid view
+        setShowCurrentSidecards(false);
+      }
+    }
+    
+    // Call the callback if provided
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    }
+  };
+
   // Fetch more data for infinite scrolling
   const fetchMoreForCurrentTab = useCallback(() => {
     switch (activeTab) {
@@ -473,6 +522,22 @@ export function DashboardFeed({
     exit: { opacity: 0, transition: { duration: 0.2 } }
   };
 
+  const getGridClass = useCallback(() => {
+    if (viewMode !== 'grid') return 'space-y-4'; // List view remains unchanged
+    
+    if (currentItemsPerRow === 1) {
+      return 'grid grid-cols-1 gap-6 max-w-2xl mx-auto';
+    }
+    
+    // For multiple items per row, create a responsive class
+    // that adapts based on screen size
+    const gridClass = showCurrentSidecards 
+      ? 'grid-single-feed' // Special class for single column with sidecards
+      : `grid-cols-1 sm:grid-cols-2 md:grid-cols-${Math.min(currentItemsPerRow, 3)} lg:grid-cols-${currentItemsPerRow} gap-6`;
+    
+    return `grid ${gridClass}`;
+  }, [currentItemsPerRow, viewMode, showCurrentSidecards]);
+
   // Render custom empty following state or default one
   const renderEmptyFollowingState = () => {
     if (emptyFollowingComponent) {
@@ -495,8 +560,52 @@ export function DashboardFeed({
     );
   };
 
+  // Render view mode controls based on order preference
+  const renderViewControls = () => {
+    const gridButton = (
+      <button
+        onClick={() => handleViewModeChange("grid")}
+        className={`p-2 ${
+          viewMode === "grid" ? "bg-muted" : "bg-background"
+        }`}
+        title="Grid view"
+      >
+        <GridIcon className="h-4 w-4" />
+      </button>
+    );
+    
+    const listButton = (
+      <button
+        onClick={() => handleViewModeChange("list")}
+        className={`p-2 ${
+          viewMode === "list" ? "bg-muted" : "bg-background"
+        }`}
+        title="List view"
+      >
+        <LayoutList className="h-4 w-4" />
+      </button>
+    );
+    
+    return (
+      <div className="flex rounded-md overflow-hidden border">
+        {listViewFirst ? (
+          <>
+            {listButton}
+            {gridButton}
+          </>
+        ) : (
+          <>
+            {gridButton}
+            {listButton}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className={cn('space-y-6', className)}>
+    <div className={cn("space-y-6", className)}>
+      {/* Title and description */}
       {title && (
         <div>
           <h2 className="text-2xl font-bold">{title}</h2>
@@ -506,6 +615,7 @@ export function DashboardFeed({
         </div>
       )}
       
+      {/* Tabs */}
       <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
         <div className="flex justify-between items-center">
           <TabsList>
@@ -523,26 +633,8 @@ export function DashboardFeed({
           </TabsList>
 
           <div className="flex items-center space-x-2">
-            <div className="flex rounded-md overflow-hidden border">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 ${
-                  viewMode === "grid" ? "bg-muted" : "bg-background"
-                }`}
-                title="Grid view"
-              >
-                <GridIcon className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-2 ${
-                  viewMode === "list" ? "bg-muted" : "bg-background"
-                }`}
-                title="List view"
-              >
-                <LayoutList className="h-4 w-4" />
-              </button>
-            </div>
+            {/* View controls */}
+            {renderViewControls()}
             
             <Button
               variant="outline"
@@ -561,7 +653,7 @@ export function DashboardFeed({
         {/* Dynamic Tab Contents */}
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="space-y-6 mt-6">
-            {/* Following tab when not logged in */}
+            {/* Tab content logic */}
             {tab.id === 'following' && !session ? (
               <SignInPrompt />
             ) : tab.id === 'creators' ? (
@@ -576,7 +668,7 @@ export function DashboardFeed({
               ) : data.length === 0 ? (
                 <EmptyState message="No creators found." />
               ) : (
-                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+                <div className={getGridClass()}>
                   {data.map((creator: UserProfile, index: number) => (
                     <motion.div
                       key={creator.id}
@@ -609,31 +701,44 @@ export function DashboardFeed({
               ) : (
                 <>
                   {/* Asset Grid or List */}
-                  <div className={viewMode === 'grid' ? 'grid-masonry' : 'space-y-4'}>
-                    {data.map((asset: Asset, index: number) => (
-                      <motion.div
-                        key={asset.id}
-                        variants={itemVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        custom={index % 10}
-                      >
-                        <AssetCard 
-                          key={asset.id} 
-                          asset={asset} 
-                          variant={viewMode === 'list' ? 'horizontal' : 'vertical'} 
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
+                  {viewMode === 'grid' ? (
+                    <div className={getGridClass()}>
+                      {data.map((asset: Asset, index: number) => (
+                        <motion.div
+                          key={asset.id}
+                          variants={itemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          custom={index % 10}
+                        >
+                          <AssetCard key={asset.id} asset={asset} variant="vertical" />
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {data.map((asset: Asset, index: number) => (
+                        <motion.div
+                          key={asset.id}
+                          variants={itemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          custom={index % 10}
+                        >
+                          <AssetCard key={asset.id} asset={asset} variant="horizontal" />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                   
-                  {/* Intersection Observer Target - This will trigger loading more content */}
+                  {/* Load more / infinite scroll */}
                   {hasMore && (
                     <div 
                       ref={loadMoreRef}
                       className="w-full flex justify-center py-8"
-                      style={{ minHeight: '100px' }} // Ensure element has minimum height for visibility
+                      style={{ minHeight: '100px' }}
                     >
                       {infiniteScroll ? (
                         isLoadingMore && (
