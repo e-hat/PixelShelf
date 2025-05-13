@@ -25,7 +25,7 @@ import {
   Code
 } from 'lucide-react';
 import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { FileUploader } from '@/components/ui/file-uploader';
+import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
 
 const onboardingSchema = z.object({
   username: z
@@ -78,6 +78,8 @@ export default function OnboardingPage() {
     }
   });
 
+  const fileUploaderRef = useRef<FileUploaderHandle>(null);
+
   // Pre-fill the form with user data if available
   useEffect(() => {
     if (session?.user?.name && !profileImagePreview && session.user.image) {
@@ -120,6 +122,11 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
     
     try {
+      // Trigger upload if there's a file to upload
+      if (fileUploaderRef.current) {
+        await fileUploaderRef.current.triggerUpload();
+      }
+      
       // First update the user profile on the server
       const response = await fetch('/api/users/profile', {
         method: 'PATCH',
@@ -210,6 +217,7 @@ export default function OnboardingPage() {
                     <FormItem>
                       <FormControl>
                         <FileUploader
+                          ref={fileUploaderRef}
                           endpoint="profileImage"
                           value={field.value}
                           onChange={field.onChange}
@@ -217,6 +225,7 @@ export default function OnboardingPage() {
                           label="Upload profile photo"
                           description="JPG, PNG or GIF. 4MB max."
                           className="max-w-md mx-auto"
+                          autoUpload={false} // Disable auto-upload
                         />
                       </FormControl>
                       <FormMessage />

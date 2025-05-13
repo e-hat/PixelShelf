@@ -164,7 +164,115 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Schema for POST request body
+const createAssetSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters'),
+  description: z.string().optional(),
+  fileUrl: z.string().url('Invalid file URL'),
+  fileType: z.enum(['IMAGE', 'MODEL_3D', 'AUDIO', 'VIDEO', 'DOCUMENT', 'OTHER']),
+  projectId: z.string().nullable().optional(),
+  isPublic: z.boolean().default(true),
+  tags: z.array(z.string()).default([]),
+});
+
 // POST /api/assets - Create a new asset
 export async function POST(req: NextRequest) {
-  // [POST implementation remains unchanged]
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
+    const body = await req.json();
+    
+    // Validate request body
+    const validatedData = createAssetSchema.safeParse(body);
+    
+    if (!validatedData.success) {
+      return NextResponse.json(
+        { error: 'Invalid request data', details: validatedData.error.errors },
+        { status: 400 }
+      );
+    }
+    
+    const { title, description, fileUrl, fileType, projectId, isPublic, tags } = validatedData.data;
+    
+    // If projectId is provided, verify the user owns the project
+    if (projectId) {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+      });
+      
+      if (!project) {
+        return NextResponse.json(
+          { error: 'Project not found' },
+          { status: 404 }
+        );
+      }
+      
+      if (project.userId !== session.user.id) {
+        return NextResponse.json(
+          { error: 'You do not have permission to add assets to this project' },
+          { status: 403 }
+        );
+      }
+    }
+    
+    // Create the asset
+    const newAsset = await prisma.asset.create({
+      data: {
+        title,
+        description: description || '',
+        fileUrl,
+        fileType,
+        projectId: projectId || null,
+        userId: session.user.id,
+        isPublic,
+        tags,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+    });
+    
+    // Format the response
+    const formattedAsset = {
+      ...newAsset,
+      likes: newAsset._count.likes,
+      comments: newAsset._count.comments,
+      likedByUser: false,
+      _count: undefined,
+    };
+    
+    return NextResponse.json(formattedAsset, { status: 201 });
+  } catch (error) {
+    console.error('Error creating asset:', error);
+    return NextResponse.json(
+      { error: 'Failed to create asset' },
+      { status: 500 }
+    );
+  }
 }

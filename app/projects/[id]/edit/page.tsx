@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileUploader } from "@/components/ui/file-uploader";
+import { FileUploader, FileUploaderHandle } from "@/components/ui/file-uploader";
 import { api, ApiError } from "@/lib/api/api-client";
 
 // Form schema
@@ -59,6 +59,8 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
       isPublic: false,
     },
   });
+
+  const fileUploaderRef = useRef<FileUploaderHandle>(null);
 
   useEffect(() => {
     // because this is a client component, we can still do side-effects
@@ -106,6 +108,11 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
+      // Trigger upload if there's a file to upload
+      if (fileUploaderRef.current) {
+        await fileUploaderRef.current.triggerUpload();
+      }
+      
       await api.projects.update(id, {
         title: values.title,
         description: values.description,
@@ -202,10 +209,12 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
                 <FormLabel>Project Thumbnail</FormLabel>
                 <FormControl>
                   <FileUploader
+                    ref={fileUploaderRef}
                     endpoint="projectImage"
                     value={field.value}
                     onChange={field.onChange}
                     fileType="image"
+                    autoUpload={false}
                   />
                 </FormControl>
                 <FormDescription>

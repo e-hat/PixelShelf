@@ -1,7 +1,7 @@
 // app/projects/new/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { FileUploader } from '@/components/ui/file-uploader';
+import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -43,10 +43,17 @@ export default function NewProjectPage() {
     },
   });
 
+  const fileUploaderRef = useRef<FileUploaderHandle>(null);
+
   const onSubmit = async (data: ProjectFormValues) => {
     setIsCreating(true);
 
     try {
+      // Trigger upload if there's a file to upload
+      if (fileUploaderRef.current) {
+        await fileUploaderRef.current.triggerUpload();
+      }
+      
       const response = await api.projects.create(data);
       
       toast.success('Project created successfully!');
@@ -137,12 +144,14 @@ export default function NewProjectPage() {
                   <FormItem>
                     <FormControl>
                       <FileUploader
+                        ref={fileUploaderRef}
                         endpoint="projectImage"
                         value={field.value}
                         onChange={field.onChange}
                         maxSizeMB={8}
                         label="Project thumbnail"
                         description="Recommended size: 1920x1080 (16:9 ratio)"
+                        autoUpload={false}
                       />
                     </FormControl>
                     <FormDescription>

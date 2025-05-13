@@ -20,19 +20,16 @@ import SettingsLayout from '@/components/layout/settings-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   User,
-  Upload,
-  X, 
   Loader2,
   Twitter,
   Github,
   Linkedin,
   Globe,
   MapPin,
-  ImageIcon,
   AlertCircle
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api/api-client';
-import { useUploadThing } from '@/lib/cloud/uploadthing-client';
+import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
 
 // Define validation schema
 const profileSchema = z.object({
@@ -55,18 +52,12 @@ export default function ProfileSettingsPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
-  const [bannerImage, setBannerImage] = useState<File | null>(null);
-  const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const bannerImageInputRef = useRef<HTMLInputElement>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | undefined>(undefined);
+  const [bannerImagePreview, setBannerImagePreview] = useState<string | undefined>(undefined);
   
-  // Set up uploadThing client for image uploads
-  const { startUpload: uploadProfileImage, isUploading: isUploadingProfile } = 
-    useUploadThing("profileImage");
-  const { startUpload: uploadBannerImage, isUploading: isUploadingBanner } = 
-    useUploadThing("projectImage"); // Reusing project image endpoint for banner
+  // Refs for file uploaders
+  const profileImageUploaderRef = useRef<FileUploaderHandle>(null);
+  const bannerImageUploaderRef = useRef<FileUploaderHandle>(null);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -90,10 +81,6 @@ export default function ProfileSettingsPage() {
       setIsLoading(true);
       
       try {
-        // For full implementation, you'd fetch the user's profile from the API
-        // In this case, since we already have session data, we can start with that
-        // and extend it with a user profile API call if necessary
-        
         // Initialize form with session data
         form.reset({
           name: session.user.name || '',
@@ -150,74 +137,6 @@ export default function ProfileSettingsPage() {
     fetchUserProfile();
   }, [session, form]);
 
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    // Check file size (limit to 2MB)
-    if (selectedFile.size > 2 * 1024 * 1024) {
-      toast.error('Profile image must be less than 2MB');
-      return;
-    }
-
-    // Check file type
-    if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Only image files are allowed');
-      return;
-    }
-
-    setProfileImage(selectedFile);
-
-    // Create image preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setProfileImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
-  };
-
-  const handleBannerImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    // Check file size (limit to 5MB)
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      toast.error('Banner image must be less than 5MB');
-      return;
-    }
-
-    // Check file type
-    if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Only image files are allowed');
-      return;
-    }
-
-    setBannerImage(selectedFile);
-
-    // Create image preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setBannerImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
-  };
-
-  const clearProfileImage = () => {
-    setProfileImage(null);
-    setProfileImagePreview(null);
-    if (profileImageInputRef.current) {
-      profileImageInputRef.current.value = '';
-    }
-  };
-
-  const clearBannerImage = () => {
-    setBannerImage(null);
-    setBannerImagePreview(null);
-    if (bannerImageInputRef.current) {
-      bannerImageInputRef.current.value = '';
-    }
-  };
-
   const onSubmit = async (data: ProfileFormValues) => {
     if (!session) {
       toast.error('You must be signed in to update your profile');
@@ -227,41 +146,20 @@ export default function ProfileSettingsPage() {
     setIsUpdating(true);
     
     try {
-      // First, upload profile image if changed
-      let profileImageUrl = profileImagePreview;
-      if (profileImage) {
-        try {
-          const uploadResult = await uploadProfileImage([profileImage]);
-          if (uploadResult && uploadResult[0]?.ufsUrl) {
-            profileImageUrl = uploadResult[0].ufsUrl;
-          }
-        } catch (imageError) {
-          console.error('Error uploading profile image:', imageError);
-          toast.error('Failed to upload profile image');
-          // Continue with the rest of the profile update
-        }
+      // Trigger uploads if there are files to upload
+      if (profileImageUploaderRef.current) {
+        await profileImageUploaderRef.current.triggerUpload();
       }
       
-      // Upload banner image if changed
-      let bannerImageUrl = bannerImagePreview;
-      if (bannerImage) {
-        try {
-          const uploadResult = await uploadBannerImage([bannerImage]);
-          if (uploadResult && uploadResult[0]?.ufsUrl) {
-            bannerImageUrl = uploadResult[0].ufsUrl;
-          }
-        } catch (bannerError) {
-          console.error('Error uploading banner image:', bannerError);
-          toast.error('Failed to upload banner image');
-          // Continue with the rest of the profile update
-        }
+      if (bannerImageUploaderRef.current) {
+        await bannerImageUploaderRef.current.triggerUpload();
       }
       
       // Update user profile
       const profileData = {
         ...data,
-        image: profileImageUrl,
-        bannerImage: bannerImageUrl,
+        image: profileImagePreview,
+        bannerImage: bannerImagePreview,
       };
       
       await api.users.updateProfile(profileData);
@@ -274,12 +172,13 @@ export default function ProfileSettingsPage() {
             ...session.user,
             name: data.name,
             username: data.username,
-            image: profileImageUrl,
+            image: profileImagePreview,
           },
         });
       }
       
       toast.success('Profile updated successfully!');
+      router.refresh();
     } catch (error) {
       console.error('Profile update error:', error);
       toast.error(error instanceof ApiError ? error.message : 'Failed to update profile. Please try again.');
@@ -483,9 +382,9 @@ export default function ProfileSettingsPage() {
                 <Button
                   type="submit"
                   variant="pixel"
-                  disabled={isUpdating || isUploadingProfile || isUploadingBanner}
+                  disabled={isUpdating}
                 >
-                  {isUpdating || isUploadingProfile || isUploadingBanner ? (
+                  {isUpdating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Saving changes...
@@ -508,69 +407,24 @@ export default function ProfileSettingsPage() {
                       This image will be displayed on your profile and in your posts.
                     </p>
                     
-                    <div className="flex items-center space-x-4">
-                      <div className="relative h-24 w-24 rounded-full overflow-hidden bg-muted">
-                        {profileImagePreview ? (
-                          <Image 
-                            src={profileImagePreview} 
-                            alt="Profile preview" 
-                            fill 
-                            className="object-cover"
-                            {...(profileImagePreview.startsWith('data:') ? {
-                              placeholder: "blur",
-                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                            } : {})}
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center">
-                            <User className="h-16 w-16 text-muted-foreground" />
-                          </div>
-                        )}
-                        
-                        {profileImagePreview && (
-                          <button 
-                            type="button"
-                            onClick={clearProfileImage}
-                            className="absolute bottom-0 right-0 rounded-full bg-background/80 p-1"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => profileImageInputRef.current?.click()}
-                          disabled={isUploadingProfile}
-                        >
-                          {isUploadingProfile ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              Uploading...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-1" />
-                              Change image
-                            </>
-                          )}
-                        </Button>
-                        <input 
-                          type="file" 
-                          ref={profileImageInputRef} 
-                          onChange={handleProfileImageChange} 
-                          className="hidden" 
-                          accept="image/*" 
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          JPG, PNG or GIF. 2MB max.
-                        </p>
-                      </div>
-                    </div>
+                    <FileUploader
+                      ref={profileImageUploaderRef}
+                      endpoint="profileImage"
+                      value={profileImagePreview}
+                      onChange={(value) => {
+                        if (typeof value === 'string') {
+                          setProfileImagePreview(value);
+                        } else if (!value) {
+                          setProfileImagePreview(undefined);
+                        }
+                      }}
+                      onUploadComplete={(url) => {
+                        setProfileImagePreview(url);
+                      }}
+                      maxSizeMB={2}
+                      label=""
+                      autoUpload={false}
+                    />
                   </div>
                   
                   <div className="pt-4 border-t">
@@ -579,69 +433,24 @@ export default function ProfileSettingsPage() {
                       This image will appear at the top of your profile page.
                     </p>
                     
-                    <div className="space-y-4">
-                      <div className="relative h-40 w-full rounded-md overflow-hidden bg-muted">
-                        {bannerImagePreview ? (
-                          <Image 
-                            src={bannerImagePreview} 
-                            alt="Banner preview" 
-                            fill 
-                            className="object-cover"
-                            {...(bannerImagePreview.startsWith('data:') ? {
-                              placeholder: "blur",
-                              blurDataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                            } : {})}
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center">
-                            <ImageIcon className="h-12 w-12 text-muted-foreground opacity-50" />
-                          </div>
-                        )}
-                        
-                        {bannerImagePreview && (
-                          <button 
-                            type="button"
-                            onClick={clearBannerImage}
-                            className="absolute top-2 right-2 rounded-full bg-background/80 p-1"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => bannerImageInputRef.current?.click()}
-                          disabled={isUploadingBanner}
-                        >
-                          {isUploadingBanner ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              Uploading...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-1" />
-                              Change banner
-                            </>
-                          )}
-                        </Button>
-                        <input 
-                          type="file" 
-                          ref={bannerImageInputRef} 
-                          onChange={handleBannerImageChange} 
-                          className="hidden" 
-                          accept="image/*" 
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          16:9 aspect ratio recommended. 5MB max.
-                        </p>
-                      </div>
-                    </div>
+                    <FileUploader
+                      ref={bannerImageUploaderRef}
+                      endpoint="projectImage"
+                      value={bannerImagePreview}
+                      onChange={(value) => {
+                        if (typeof value === 'string') {
+                          setBannerImagePreview(value);
+                        } else if (!value) {
+                          setBannerImagePreview(undefined);
+                        }
+                      }}
+                      onUploadComplete={(url) => {
+                        setBannerImagePreview(url);
+                      }}
+                      maxSizeMB={5}
+                      label=""
+                      autoUpload={false}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -652,9 +461,9 @@ export default function ProfileSettingsPage() {
                 type="button"
                 variant="pixel"
                 onClick={form.handleSubmit(onSubmit)}
-                disabled={isUpdating || isUploadingProfile || isUploadingBanner}
+                disabled={isUpdating}
               >
-                {isUpdating || isUploadingProfile || isUploadingBanner ? (
+                {isUpdating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving changes...
