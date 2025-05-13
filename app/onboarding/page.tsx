@@ -24,6 +24,8 @@ import {
   Music,
   Code
 } from 'lucide-react';
+import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { FileUploader } from '@/components/ui/file-uploader';
 
 const onboardingSchema = z.object({
   username: z
@@ -34,6 +36,7 @@ const onboardingSchema = z.object({
   bio: z.string().max(500, { message: 'Bio must be at most 500 characters' }).optional(),
   role: z.string().optional(),
   website: z.string().optional(),
+  profileImage: z.string().optional(),
 });
 
 type OnboardingFormValues = z.infer<typeof onboardingSchema>;
@@ -62,6 +65,7 @@ export default function OnboardingPage() {
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
   } = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
@@ -125,7 +129,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           username: data.username,
           bio: data.bio || '',
-          // role: selectedRole || data.role, // TODO: Implement roles...
+          image: data.profileImage, // Include the uploaded image URL
         }),
       });
       
@@ -134,28 +138,21 @@ export default function OnboardingPage() {
         throw new Error(errorData.error || 'Failed to update profile');
       }
       
-      // Update the session with the new username
+      // Update the session with the new data
       if (update) {
         await update({
           ...session,
           user: {
             ...session?.user,
             username: data.username,
-            image: profileImagePreview || session?.user?.image,
+            image: data.profileImage || session?.user?.image,
           },
         });
       }
-  
-      // Upload profile image if selected (would be in a real app)
-      // if (profileImage) {
-      //   // Upload image logic would go here
-      // }
-      
+
       toast.success('Profile set up successfully!');
-      
-      // Redirect to the home page
       router.push('/');
-      router.refresh(); // Make sure the page fully refreshes to apply session changes
+      router.refresh();
     } catch (error) {
       console.error('Onboarding error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to set up profile. Please try again.');
@@ -206,47 +203,26 @@ export default function OnboardingPage() {
           {stage === 1 && (
             <div className="space-y-6">
               <div className="flex flex-col items-center">
-                <div
-                  className="relative h-32 w-32 rounded-full overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity mb-4"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {profileImagePreview ? (
-                    <Image 
-                      src={profileImagePreview} 
-                      alt="Profile preview" 
-                      fill 
-                      className="object-cover"
-                      placeholder="blur"
-                      blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center">
-                      <User className="h-16 w-16 text-muted-foreground" />
-                    </div>
+                <FormField
+                  control={control}
+                  name="profileImage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <FileUploader
+                          endpoint="profileImage"
+                          value={field.value}
+                          onChange={field.onChange}
+                          maxSizeMB={4}
+                          label="Upload profile photo"
+                          description="JPG, PNG or GIF. 4MB max."
+                          className="max-w-md mx-auto"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 opacity-0 hover:opacity-100 transition-opacity">
-                    <Upload className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleProfileImageChange} 
-                  className="hidden" 
-                  accept="image/*" 
                 />
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {profileImagePreview ? 'Change Photo' : 'Upload Photo'}
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  JPG, PNG or GIF. 2MB max.
-                </p>
               </div>
 
               <div className="text-center mt-8">
@@ -259,11 +235,9 @@ export default function OnboardingPage() {
                   Continue
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
-                {profileImagePreview ? (
-                  <p className="text-xs text-muted-foreground mt-2">Looks great!</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-2">You can also skip and add a photo later</p>
-                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  You can also skip and add a photo later
+                </p>
               </div>
             </div>
           )}

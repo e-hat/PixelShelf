@@ -3,11 +3,14 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { generateClientDropzoneAccept } from 'uploadthing/client';
-import { Accept, useDropzone } from 'react-dropzone';
+import {
+  generateClientDropzoneAccept,
+  generatePermittedFileTypes,
+} from 'uploadthing/client';
+import { Accept, useDropzone, FileRejection } from 'react-dropzone';
 import { UploadCloud, File, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useUploadThing } from '@/lib/cloud/uploadthing-client';
+import { useUploadThing, uploadFiles } from '@/lib/cloud/uploadthing-client';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -66,6 +69,16 @@ export function FileUploader({
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
 
+  // Get server configuration for file types
+  const { routeConfig } = useUploadThing(endpoint);
+  
+  // Use server config if available, otherwise fall back to local accept types
+  const accept = routeConfig
+    ? generateClientDropzoneAccept(
+        generatePermittedFileTypes(routeConfig).fileTypes
+      )
+    : getAcceptType(fileType);
+
   // Determine max file size based on file type or prop
   const getMaxSize = () => {
     if (maxSizeMB) return maxSizeMB * 1024 * 1024;
@@ -82,46 +95,16 @@ export function FileUploader({
 
   const maxSize = getMaxSize();
 
-  const { startUpload, isUploading: isUploadingFile } = useUploadThing(endpoint, {
-    onClientUploadComplete: (res) => {
-      setIsUploading(false);
-      setUploadProgress(100);
-      setUploadSuccess(true);
-      
-      const uploadedFile = res?.[0] as { fileUrl?: string; name?: string };
-      if (uploadedFile?.fileUrl) {
-        onChange(uploadedFile.fileUrl);
-        setPreview(uploadedFile.fileUrl);
-        setFileName(uploadedFile.name || null);
-      }
-      
-      // Reset success message after a delay
-      setTimeout(() => {
-        setUploadSuccess(false);
-      }, 3000);
-    },
-    onUploadProgress: (progress) => {
-      setUploadProgress(progress);
-    },
-    onUploadError: (error) => {
-      setIsUploading(false);
-      setUploadProgress(0);
-      setUploadError(error.message);
-      
-      console.error('Upload error:', error);
-      if (onUploadError) onUploadError(error);
-      
-      // Reset error message after a delay
-      setTimeout(() => {
-        setUploadError(null);
-      }, 5000);
-    },
-  });
-
-  const accept = getAcceptType(fileType);
-
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[], fileRejections: FileRejection[]) => {
+      // Handle file rejections
+      if (fileRejections.length > 0) {
+        const msg = fileRejections[0].errors[0].message;
+        setUploadError(msg);
+        setTimeout(() => setUploadError(null), 5000);
+        return;
+      }
+
       if (acceptedFiles.length === 0) return;
       
       const file = acceptedFiles[0];
@@ -133,7 +116,7 @@ export function FileUploader({
       }
       
       // Create preview for images
-      if (fileType === 'image') {
+      if (fileType === 'image' || file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
           setPreview(e.target?.result as string);
@@ -149,10 +132,39 @@ export function FileUploader({
       
       if (onUploadBegin) onUploadBegin();
       
-      // Start upload
-      startUpload([file]);
+      try {
+        // Start upload using uploadFiles
+        const res = await uploadFiles(endpoint, {
+          files: [file],
+          onUploadProgress: ({ progress }) => setUploadProgress(progress),
+        });
+        
+        if (res && res[0]) {
+          const uploadedFile = res[0];
+          onChange(uploadedFile.ufsUrl);
+          setPreview(uploadedFile.ufsUrl);
+          setFileName(uploadedFile.name);
+          setUploadSuccess(true);
+          
+          // Reset success message after a delay
+          setTimeout(() => {
+            setUploadSuccess(false);
+          }, 3000);
+        }
+      } catch (error: any) {
+        setUploadError(error.message || 'Upload failed');
+        console.error('Upload error:', error);
+        if (onUploadError) onUploadError(error);
+        
+        // Reset error message after a delay
+        setTimeout(() => {
+          setUploadError(null);
+        }, 5000);
+      } finally {
+        setIsUploading(false);
+      }
     },
-    [fileType, maxSize, onUploadBegin, startUpload]
+    [fileType, maxSize, onUploadBegin, endpoint, onChange, onUploadError]
   );
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({

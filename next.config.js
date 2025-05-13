@@ -12,6 +12,7 @@ const nextConfig = {
       'picsum.photos',
       'cdn.jsdelivr.net',
       'avatars.githubusercontent.com',
+      'empvoqckqx.ufs.sh',
     ],
   },
   experimental: {

@@ -288,7 +288,6 @@ function UploadPageContent() {
                     <FormControl>
                       <FileUploader
                         endpoint="assetUploader"
-                        fileType={getUploaderType()}
                         value={field.value}
                         onChange={handleFileUpload}
                         label={`Upload ${ASSET_TYPE_NAMES[selectedFileType]}`}

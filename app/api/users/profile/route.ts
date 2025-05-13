@@ -9,8 +9,10 @@ const updateProfileSchema = z.object({
   username: z.string().min(3, { message: 'Username must be at least 3 characters' })
     .regex(/^[a-zA-Z0-9_]+$/, { message: 'Username can only contain letters, numbers, and underscores' }),
   bio: z.string().optional(),
-  // role: z.string().optional(), // TODO: Implement role...
   location: z.string().optional(),
+  // role: z.string().optional(), // TODO: Implement role...
+  image: z.string().optional(),
+  bannerImage: z.string().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -61,6 +63,8 @@ export async function PATCH(req: NextRequest) {
         bio: validated.data.bio || undefined,
         location: validated.data.location || undefined,
         // role: validated.data.role || undefined, // TODO: Implement role...
+        image: validated.data.image || undefined,
+        bannerImage: validated.data.bannerImage || undefined,
       },
     });
     
