@@ -2,13 +2,13 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, ReactElement } from 'react';
 import {
   generateClientDropzoneAccept,
   generatePermittedFileTypes,
 } from 'uploadthing/client';
 import { Accept, useDropzone, FileRejection } from 'react-dropzone';
-import { UploadCloud, File, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, FileIcon, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useUploadThing, uploadFiles } from '@/lib/cloud/uploadthing-client';
 import { cn } from '@/lib/utils';
@@ -18,9 +18,9 @@ import { ASSET_TYPES, FILE_UPLOAD } from '@/constants';
 
 interface FileUploaderProps {
   endpoint: 'assetUploader' | 'profileImage' | 'projectImage';
-  value?: string;
-  onChange: (url?: string) => void;
-  onUploadBegin?: () => void;
+  value?: string | File;
+  onChange: (file?: File | string) => void;
+  onUploadComplete?: (url: string) => void;
   onUploadError?: (error: Error) => void;
   className?: string;
   fileType?: 'image' | 'audio' | 'video' | 'pdf' | 'model' | 'blob';
@@ -28,6 +28,9 @@ interface FileUploaderProps {
   label?: string;
   description?: string;
   showRemoveButton?: boolean;
+  disabled?: boolean;
+  required?: boolean;
+  autoUpload?: boolean;
 }
 
 const getAcceptType = (type: FileUploaderProps['fileType']): Accept | undefined => {
@@ -49,20 +52,36 @@ const getAcceptType = (type: FileUploaderProps['fileType']): Accept | undefined 
   }
 };
 
-export function FileUploader({
-  endpoint,
-  value,
-  onChange,
-  onUploadBegin,
-  onUploadError,
-  className,
-  fileType = 'image',
-  maxSizeMB,
-  label = 'Upload file',
-  description,
-  showRemoveButton = true,
-}: FileUploaderProps) {
-  const [preview, setPreview] = useState<string | null>(value || null);
+export interface FileUploaderHandle {
+  triggerUpload: () => Promise<void>;
+}
+
+export const FileUploader = React.forwardRef<
+  FileUploaderHandle,
+  FileUploaderProps
+>(function FileUploader(
+  {
+    endpoint,
+    value,
+    onChange,
+    onUploadComplete,
+    onUploadError,
+    className,
+    fileType = 'image',
+    maxSizeMB,
+    label = 'Upload file',
+    description,
+    showRemoveButton = true,
+    disabled = false,
+    required = false,
+    autoUpload = false,
+  },
+  ref
+): ReactElement {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(
+    typeof value === 'string' ? value : null
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -95,6 +114,22 @@ export function FileUploader({
 
   const maxSize = getMaxSize();
 
+  // Update preview when value changes
+  useEffect(() => {
+    if (value instanceof File) {
+      setSelectedFile(value);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(value);
+      setFileName(value.name);
+    } else if (typeof value === 'string') {
+      setPreview(value);
+      setSelectedFile(null);
+    }
+  }, [value]);
+
   const onDrop = useCallback(
     async (acceptedFiles: File[], fileRejections: FileRejection[]) => {
       // Handle file rejections
@@ -112,8 +147,15 @@ export function FileUploader({
       // Check file size
       if (file.size > maxSize) {
         setUploadError(`File is too large. Maximum size is ${Math.round(maxSize / (1024 * 1024))} MB.`);
+        setTimeout(() => setUploadError(null), 5000);
         return;
       }
+      
+      // Store the file
+      setSelectedFile(file);
+      setFileName(file.name);
+      setUploadError(null);
+      setUploadSuccess(false);
       
       // Create preview for images
       if (fileType === 'image' || file.type.startsWith('image/')) {
@@ -124,59 +166,83 @@ export function FileUploader({
         reader.readAsDataURL(file);
       }
       
-      setFileName(file.name);
-      setUploadError(null);
-      setUploadSuccess(false);
-      setIsUploading(true);
-      setUploadProgress(0);
+      // Notify parent component
+      onChange(file);
       
-      if (onUploadBegin) onUploadBegin();
-      
-      try {
-        // Start upload using uploadFiles
-        const res = await uploadFiles(endpoint, {
-          files: [file],
-          onUploadProgress: ({ progress }) => setUploadProgress(progress),
-        });
-        
-        if (res && res[0]) {
-          const uploadedFile = res[0];
-          onChange(uploadedFile.ufsUrl);
-          setPreview(uploadedFile.ufsUrl);
-          setFileName(uploadedFile.name);
-          setUploadSuccess(true);
-          
-          // Reset success message after a delay
-          setTimeout(() => {
-            setUploadSuccess(false);
-          }, 3000);
-        }
-      } catch (error: any) {
-        setUploadError(error.message || 'Upload failed');
-        console.error('Upload error:', error);
-        if (onUploadError) onUploadError(error);
-        
-        // Reset error message after a delay
-        setTimeout(() => {
-          setUploadError(null);
-        }, 5000);
-      } finally {
-        setIsUploading(false);
+      // If autoUpload is true, upload immediately (legacy behavior)
+      if (autoUpload) {
+        await uploadFile(file);
       }
     },
-    [fileType, maxSize, onUploadBegin, endpoint, onChange, onUploadError]
+    [fileType, maxSize, onChange, autoUpload]
   );
+
+  // Separate upload function that can be called manually
+  const uploadFile = async (fileToUpload: File) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      // Start upload using uploadFiles
+      const res = await uploadFiles(endpoint, {
+        files: [fileToUpload],
+        onUploadProgress: ({ progress }) => setUploadProgress(progress),
+      });
+      
+      if (res && res[0]) {
+        const uploadedFile = res[0];
+        const url = uploadedFile.ufsUrl;
+        
+        onChange(url);
+        setPreview(url);
+        setFileName(uploadedFile.name);
+        setUploadSuccess(true);
+        setSelectedFile(null); // Clear the file since it's uploaded
+        
+        if (onUploadComplete) {
+          onUploadComplete(url);
+        }
+        
+        // Reset success message after a delay
+        setTimeout(() => {
+          setUploadSuccess(false);
+        }, 3000);
+      }
+    } catch (error: any) {
+      setUploadError(error.message || 'Upload failed');
+      console.error('Upload error:', error);
+      if (onUploadError) {
+        onUploadError(error);
+      }
+      
+      // Reset error message after a delay
+      setTimeout(() => {
+        setUploadError(null);
+      }, 5000);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Public method to trigger upload manually
+  const triggerUpload = useCallback(async () => {
+    if (selectedFile && !isUploading) {
+      await uploadFile(selectedFile);
+    }
+  }, [selectedFile, isUploading]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
     accept,
     maxFiles: 1,
     maxSize,
+    disabled: disabled || isUploading,
   });
 
   const handleRemove = () => {
     setPreview(null);
     setFileName(null);
+    setSelectedFile(null);
     setUploadSuccess(false);
     setUploadError(null);
     onChange(undefined);
@@ -201,7 +267,7 @@ export function FileUploader({
     }
   };
 
-  // Get correct icon for file type preview
+  // Get file type icon
   const getFileTypeIcon = () => {
     switch (fileType) {
       case 'audio':
@@ -248,15 +314,33 @@ export function FileUploader({
       default:
         return (
           <div className="bg-gradient-to-br from-gray-400 to-gray-600 aspect-video w-full rounded-lg flex items-center justify-center">
-            <File className="h-16 w-16 text-white" />
+            <FileIcon className="h-16 w-16 text-white" />
           </div>
         );
     }
   };
 
+  React.useImperativeHandle(ref, () => ({
+    triggerUpload,
+  }));
+
+  // Expose uploadFile method to parent components
+  useEffect(() => {
+    // Attach the triggerUpload method to the component instance
+    // This allows parent components to call it manually
+    if (onChange && typeof onChange === 'function') {
+      (onChange as any).triggerUpload = triggerUpload;
+    }
+  }, [onChange, triggerUpload]);
+
   return (
     <div className={cn('w-full space-y-2', className)}>
-      {label && <label className="text-sm font-medium">{label}</label>}
+      {label && (
+        <label className="text-sm font-medium">
+          {label}
+          {required && <span className="text-destructive ml-1">*</span>}
+        </label>
+      )}
       
       {preview && fileType === 'image' ? (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
@@ -265,11 +349,9 @@ export function FileUploader({
             alt="Uploaded file"
             fill
             className="object-cover"
-            placeholder="blur"
-            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFfwJnQMuRpQAAAABJRU5ErkJggg=="
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
-          {showRemoveButton && (
+          {showRemoveButton && !disabled && (
             <div className="absolute top-2 right-2 flex space-x-2">
               <Button
                 type="button"
@@ -277,6 +359,7 @@ export function FileUploader({
                 size="icon"
                 className="h-8 w-8 rounded-full opacity-90 hover:opacity-100"
                 onClick={handleRemove}
+                disabled={isUploading}
               >
                 <X className="h-4 w-4" />
                 <span className="sr-only">Remove</span>
@@ -297,16 +380,42 @@ export function FileUploader({
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm truncate">{fileName || 'File uploaded'}</p>
             <p className="text-xs text-muted-foreground">
-              {fileType.toUpperCase()} • {formatFileSize(maxSize / 2)} {/* Placeholder size */}
+              {fileType.toUpperCase()} • {selectedFile ? formatFileSize(selectedFile.size) : 'Uploaded'}
             </p>
           </div>
-          {showRemoveButton && (
+          {showRemoveButton && !disabled && (
             <Button
               type="button"
               variant="destructive"
               size="icon"
               className="h-8 w-8 flex-shrink-0"
               onClick={handleRemove}
+              disabled={isUploading}
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Remove</span>
+            </Button>
+          )}
+        </div>
+      ) : selectedFile && !preview ? (
+        <div className="relative border rounded-lg p-4 flex items-center space-x-4">
+          <div className="flex-shrink-0 w-16">
+            {getFileTypeIcon()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{fileName}</p>
+            <p className="text-xs text-muted-foreground">
+              {fileType.toUpperCase()} • {formatFileSize(selectedFile.size)} • Ready to upload
+            </p>
+          </div>
+          {showRemoveButton && !disabled && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="h-8 w-8 flex-shrink-0"
+              onClick={handleRemove}
+              disabled={isUploading}
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Remove</span>
@@ -323,6 +432,7 @@ export function FileUploader({
             isUploading ? 'pointer-events-none opacity-60' : '',
             uploadError ? 'border-destructive/50' : '',
             uploadSuccess ? 'border-green-500/50' : '',
+            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
             className
           )}
         >
@@ -356,7 +466,7 @@ export function FileUploader({
                     {getFileTypeLabel()} up to {formatFileSize(maxSize)}
                   </p>
                 </div>
-                <Button variant="outline" className="mt-2">
+                <Button variant="outline" className="mt-2" disabled={disabled}>
                   Select File
                 </Button>
               </>
@@ -374,4 +484,6 @@ export function FileUploader({
       )}
     </div>
   );
-}
+});
+
+FileUploader.displayName = 'FileUploader';

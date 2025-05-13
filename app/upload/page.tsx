@@ -1,7 +1,7 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileUploader } from '@/components/ui/file-uploader';
+import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
 import { Separator } from '@/components/ui/separator';
 import { ASSET_TYPES, ASSET_TYPE_NAMES } from '@/constants';
 import { api, ApiError } from '@/lib/api/api-client';
@@ -86,6 +86,8 @@ function UploadPageContent() {
   // Get projectId from query params if present
   const projectIdParam = searchParams?.get('projectId') ?? undefined;
 
+  const uploaderRef = useRef<FileUploaderHandle>(null);
+
   // Initialize form with default values
   const form = useForm<UploadFormValues>({
     resolver: zodResolver(uploadInputSchema),
@@ -131,15 +133,23 @@ function UploadPageContent() {
   };
 
   // Handle file upload
-  const handleFileUpload = (url?: string) => {
-    form.setValue('fileUrl', url ?? '');
-  };
+  const handleFileUpload = (file?: string | File) => {
+    if (typeof file === 'string') {
+      form.setValue('fileUrl', file)
+    } else if (file) {
+      // here `file` must be a File object
+      const preview = URL.createObjectURL(file)
+      form.setValue('fileUrl', preview)
+    } else {
+      form.setValue('fileUrl', '')
+    }
+  }
 
   // Handle form submission
   const onSubmit = async (data: UploadFormValues) => {
     try {
       setIsLoading(true);
-      
+      await uploaderRef.current?.triggerUpload();
       const assetData = {
         title: data.title,
         description: data.description || '',
@@ -201,7 +211,7 @@ function UploadPageContent() {
       case 'DOCUMENT':
         return <FileText className="h-5 w-5" />;
       default:
-        return <File className="h-5 w-5" />;
+        return <FileIcon className="h-5 w-5" />;
     }
   };
 
@@ -262,7 +272,7 @@ function UploadPageContent() {
                 {value === 'VIDEO' && <FileVideo className="h-8 w-8 mb-2" />}
                 {value === 'MODEL_3D' && <Box className="h-8 w-8 mb-2" />}
                 {value === 'DOCUMENT' && <FileText className="h-8 w-8 mb-2" />}
-                {value === 'OTHER' && <File className="h-8 w-8 mb-2" />}
+                {value === 'OTHER' && <FileIcon className="h-8 w-8 mb-2" />}
                 <span className="text-sm font-medium">{ASSET_TYPE_NAMES[value]}</span>
               </button>
             ))}
@@ -287,6 +297,7 @@ function UploadPageContent() {
                   <FormItem>
                     <FormControl>
                       <FileUploader
+                        ref={uploaderRef}
                         endpoint="assetUploader"
                         value={field.value}
                         onChange={handleFileUpload}
@@ -459,7 +470,7 @@ function UploadPageContent() {
 
 export default function UploadPage() {
   return (
-    <Suspense fallback={<div>Loading URL parameters...</div>}>
+    <Suspense fallback={<div>Loading...</div>}>
       <UploadPageContent />
     </Suspense>
   )
@@ -481,7 +492,7 @@ const CheckIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const File = ({ className }: { className?: string }) => (
+const FileIcon = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
