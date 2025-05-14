@@ -1,7 +1,7 @@
 // app/projects/new/page.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { z } from 'zod';
@@ -12,12 +12,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
+import { FileUploader } from '@/components/ui/file-uploader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FolderKanban, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/api-client';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 
 const projectSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters' }),
@@ -32,6 +33,10 @@ export default function NewProjectPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  
+  // Use the startUpload function from uploadthing
+  const { startUpload } = useUploadThing('projectImage');
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -43,18 +48,37 @@ export default function NewProjectPage() {
     },
   });
 
-  const fileUploaderRef = useRef<FileUploaderHandle>(null);
+  const handleThumbnailChange = (value?: File | string) => {
+    if (value instanceof File) {
+      setThumbnailFile(value);
+      // Create preview URL
+      const preview = URL.createObjectURL(value);
+      form.setValue('thumbnail', preview);
+    } else if (typeof value === 'string') {
+      form.setValue('thumbnail', value);
+      setThumbnailFile(null);
+    }
+  };
 
   const onSubmit = async (data: ProjectFormValues) => {
     setIsCreating(true);
 
     try {
-      // Trigger upload if there's a file to upload
-      if (fileUploaderRef.current) {
-        await fileUploaderRef.current.triggerUpload();
+      // Upload thumbnail if there's a file to upload
+      let thumbnailUrl = data.thumbnail;
+      if (thumbnailFile) {
+        const uploadResult = await startUpload([thumbnailFile]);
+        if (uploadResult && uploadResult[0]) {
+          thumbnailUrl = uploadResult[0].ufsUrl;
+        }
       }
       
-      const response = await api.projects.create(data);
+      const projectData = {
+        ...data,
+        thumbnail: thumbnailUrl,
+      };
+      
+      const response = await api.projects.create(projectData);
       
       toast.success('Project created successfully!');
       router.push(`/u/${session?.user?.username}/projects/${response.id}`);
@@ -144,10 +168,9 @@ export default function NewProjectPage() {
                   <FormItem>
                     <FormControl>
                       <FileUploader
-                        ref={fileUploaderRef}
                         endpoint="projectImage"
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={handleThumbnailChange}
                         maxSizeMB={8}
                         label="Project thumbnail"
                         description="Recommended size: 1920x1080 (16:9 ratio)"

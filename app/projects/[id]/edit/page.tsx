@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useRef } from "react";
+import { use, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -22,8 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileUploader, FileUploaderHandle } from "@/components/ui/file-uploader";
+import { FileUploader } from "@/components/ui/file-uploader";
 import { api, ApiError } from "@/lib/api/api-client";
+import { useUploadThing } from "@/lib/cloud/uploadthing-client";
 
 // Form schema
 const formSchema = z.object({
@@ -49,6 +50,10 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
   const [project, setProject] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+
+  // Use the startUpload function from uploadthing
+  const { startUpload } = useUploadThing('projectImage');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -59,8 +64,6 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
       isPublic: false,
     },
   });
-
-  const fileUploaderRef = useRef<FileUploaderHandle>(null);
 
   useEffect(() => {
     // because this is a client component, we can still do side-effects
@@ -105,18 +108,34 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
     fetchProject();
   }, [id, router, session, status, form]);
 
+  const handleThumbnailChange = (value?: File | string) => {
+    if (value instanceof File) {
+      setThumbnailFile(value);
+      // Create preview URL
+      const preview = URL.createObjectURL(value);
+      form.setValue('thumbnail', preview);
+    } else if (typeof value === 'string') {
+      form.setValue('thumbnail', value);
+      setThumbnailFile(null);
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Trigger upload if there's a file to upload
-      if (fileUploaderRef.current) {
-        await fileUploaderRef.current.triggerUpload();
+      // Upload thumbnail if there's a file to upload
+      let thumbnailUrl = values.thumbnail;
+      if (thumbnailFile) {
+        const uploadResult = await startUpload([thumbnailFile]);
+        if (uploadResult && uploadResult[0]) {
+          thumbnailUrl = uploadResult[0].ufsUrl;
+        }
       }
       
       await api.projects.update(id, {
         title: values.title,
         description: values.description,
-        thumbnail: values.thumbnail,
+        thumbnail: thumbnailUrl,
         isPublic: values.isPublic,
       });
       toast.success("Project updated successfully");
@@ -209,10 +228,9 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
                 <FormLabel>Project Thumbnail</FormLabel>
                 <FormControl>
                   <FileUploader
-                    ref={fileUploaderRef}
                     endpoint="projectImage"
                     value={field.value}
-                    onChange={field.onChange}
+                    onChange={handleThumbnailChange}
                     fileType="image"
                     autoUpload={false}
                   />

@@ -29,7 +29,9 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api/api-client';
-import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
+import { FileUploader } from '@/components/ui/file-uploader';
+import { CircularProfilePhoto } from '@/components/ui/circular-profile-photo';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 
 // Define validation schema
 const profileSchema = z.object({
@@ -52,13 +54,15 @@ export default function ProfileSettingsPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | undefined>(undefined);
+  const [bannerImage, setBannerImage] = useState<File | null>(null);
   const [bannerImagePreview, setBannerImagePreview] = useState<string | undefined>(undefined);
   
-  // Refs for file uploaders
-  const profileImageUploaderRef = useRef<FileUploaderHandle>(null);
-  const bannerImageUploaderRef = useRef<FileUploaderHandle>(null);
-
+  // Use the startUpload functions from uploadthing
+  const { startUpload: startProfileUpload } = useUploadThing('profileImage');
+  const { startUpload: startBannerUpload } = useUploadThing('projectImage');
+  
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -137,6 +141,27 @@ export default function ProfileSettingsPage() {
     fetchUserProfile();
   }, [session, form]);
 
+  const handleProfileImageChange = (value?: File | string) => {
+    if (value instanceof File) {
+      setProfileImage(value);
+    } else if (typeof value === 'string') {
+      setProfileImagePreview(value);
+    }
+  };
+
+  const handleBannerImageChange = (value?: File | string) => {
+    if (value instanceof File) {
+      setBannerImage(value);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setBannerImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(value);
+    } else if (typeof value === 'string') {
+      setBannerImagePreview(value);
+    }
+  };
+
   const onSubmit = async (data: ProfileFormValues) => {
     if (!session) {
       toast.error('You must be signed in to update your profile');
@@ -146,21 +171,22 @@ export default function ProfileSettingsPage() {
     setIsUpdating(true);
     
     try {
-      // Trigger uploads if there are files to upload
       let profileImageUrl = profileImagePreview;
       let bannerImageUrl = bannerImagePreview;
       
-      if (profileImageUploaderRef.current) {
-        const uploadedUrl = await profileImageUploaderRef.current.triggerUpload();
-        if (uploadedUrl) {
-          profileImageUrl = uploadedUrl;
+      // Upload profile image if there's one to upload
+      if (profileImage) {
+        const uploadResult = await startProfileUpload([profileImage]);
+        if (uploadResult && uploadResult[0]) {
+          profileImageUrl = uploadResult[0].ufsUrl;
         }
       }
       
-      if (bannerImageUploaderRef.current) {
-        const uploadedUrl = await bannerImageUploaderRef.current.triggerUpload();
-        if (uploadedUrl) {
-          bannerImageUrl = uploadedUrl;
+      // Upload banner image if there's one to upload
+      if (bannerImage) {
+        const uploadResult = await startBannerUpload([bannerImage]);
+        if (uploadResult && uploadResult[0]) {
+          bannerImageUrl = uploadResult[0].ufsUrl;
         }
       }
       
@@ -175,7 +201,7 @@ export default function ProfileSettingsPage() {
       
       // Update session with new user data
       if (update) {
-        await update({
+        const updatedSession = await update({
           ...session,
           user: {
             ...session.user,
@@ -184,10 +210,12 @@ export default function ProfileSettingsPage() {
             image: updatedUser.image,
           },
         });
+        
+        // Force refresh to ensure everything is updated
+        router.refresh();
       }
       
       toast.success('Profile updated successfully!');
-      router.refresh();
     } catch (error) {
       console.error('Profile update error:', error);
       toast.error(error instanceof ApiError ? error.message : 'Failed to update profile. Please try again.');
@@ -416,24 +444,15 @@ export default function ProfileSettingsPage() {
                       This image will be displayed on your profile and in your posts.
                     </p>
                     
-                    <FileUploader
-                      ref={profileImageUploaderRef}
-                      endpoint="profileImage"
-                      value={profileImagePreview}
-                      onChange={(value) => {
-                        if (typeof value === 'string') {
-                          setProfileImagePreview(value);
-                        } else if (!value) {
-                          setProfileImagePreview(undefined);
-                        }
-                      }}
-                      onUploadComplete={(url) => {
-                        setProfileImagePreview(url);
-                      }}
-                      maxSizeMB={2}
-                      label=""
-                      autoUpload={false}
-                    />
+                    <div className="flex justify-center">
+                      <CircularProfilePhoto
+                        value={profileImage || profileImagePreview}
+                        onChange={handleProfileImageChange}
+                        size="xl"
+                        description="JPG, PNG or GIF. 2MB max."
+                        currentImage={session?.user?.image || undefined}
+                      />
+                    </div>
                   </div>
                   
                   <div className="pt-4 border-t">
@@ -443,19 +462,9 @@ export default function ProfileSettingsPage() {
                     </p>
                     
                     <FileUploader
-                      ref={bannerImageUploaderRef}
                       endpoint="projectImage"
                       value={bannerImagePreview}
-                      onChange={(value) => {
-                        if (typeof value === 'string') {
-                          setBannerImagePreview(value);
-                        } else if (!value) {
-                          setBannerImagePreview(undefined);
-                        }
-                      }}
-                      onUploadComplete={(url) => {
-                        setBannerImagePreview(url);
-                      }}
+                      onChange={handleBannerImageChange}
                       maxSizeMB={5}
                       label=""
                       autoUpload={false}

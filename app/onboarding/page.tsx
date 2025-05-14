@@ -31,7 +31,8 @@ import {
   FormItem, 
   FormMessage 
 } from '@/components/ui/form';
-import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
+import { CircularProfilePhoto } from '@/components/ui/circular-profile-photo';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 
 const onboardingSchema = z.object({
   username: z
@@ -63,8 +64,10 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stage, setStage] = useState(1);
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [profileImagePreview, setProfileImagePreview] = useState<string | undefined>(undefined);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  
+  // Use the startUpload function from uploadthing
+  const { startUpload } = useUploadThing('profileImage');
 
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
@@ -74,28 +77,24 @@ export default function OnboardingPage() {
       bio: '',
       website: '',
       role: '',
+      profileImage: session?.user?.image || '',
     }
   });
 
-  const fileUploaderRef = useRef<FileUploaderHandle>(null);
-
   // Pre-fill the form with user data if available
   useEffect(() => {
-    if (session?.user?.name && !profileImagePreview && session.user.image) {
-      setProfileImagePreview(session.user.image);
+    if (session?.user?.username) {
+      form.setValue('username', session.user.username);
     }
-  }, [session, profileImagePreview]);
+    if (session?.user?.image) {
+      form.setValue('profileImage', session.user.image);
+    }
+  }, [session, form]);
 
   const handleProfileImageChange = (value?: File | string) => {
     if (value instanceof File) {
       setProfileImage(value);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(value);
     } else if (typeof value === 'string') {
-      setProfileImagePreview(value);
       form.setValue('profileImage', value);
     }
   };
@@ -109,12 +108,12 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
     
     try {
-      // Trigger upload if there's a file to upload
+      // Upload profile image if there's one to upload
       let profileImageUrl = data.profileImage;
-      if (fileUploaderRef.current && profileImage) {
-        const uploadedUrl = await fileUploaderRef.current.triggerUpload();
-        if (uploadedUrl) {
-          profileImageUrl = uploadedUrl;
+      if (profileImage) {
+        const uploadResult = await startUpload([profileImage]);
+        if (uploadResult && uploadResult[0]) {
+          profileImageUrl = uploadResult[0].ufsUrl;
         }
       }
       
@@ -151,6 +150,7 @@ export default function OnboardingPage() {
       }
 
       toast.success('Profile set up successfully!');
+      // Immediately redirect and refresh the page to ensure updates are reflected
       router.push('/');
       router.refresh();
     } catch (error) {
@@ -210,16 +210,13 @@ export default function OnboardingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <FileUploader
-                            ref={fileUploaderRef}
-                            endpoint="profileImage"
-                            value={profileImagePreview}
+                          <CircularProfilePhoto
+                            value={profileImage || field.value}
                             onChange={handleProfileImageChange}
-                            maxSizeMB={4}
-                            label="Upload profile photo"
-                            description="JPG, PNG or GIF. 4MB max."
-                            className="max-w-md mx-auto"
-                            autoUpload={false}
+                            size="xl"
+                            description="Upload a profile photo"
+                            placeholder="Choose a photo"
+                            currentImage={session?.user?.image || undefined}
                           />
                         </FormControl>
                         <FormMessage />

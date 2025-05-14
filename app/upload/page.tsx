@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
+import { FileUploader } from '@/components/ui/file-uploader';
 import { Separator } from '@/components/ui/separator';
 import { ASSET_TYPES, ASSET_TYPE_NAMES } from '@/constants';
 import { api, ApiError } from '@/lib/api/api-client';
@@ -53,6 +53,7 @@ import {
   FolderKanban,
   InfoIcon,
 } from 'lucide-react';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 
 const uploadInputSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters' }),
@@ -82,11 +83,13 @@ function UploadPageContent() {
   const [projects, setProjects] = useState<any[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [selectedFileType, setSelectedFileType] = useState<keyof typeof ASSET_TYPES>('IMAGE');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   // Get projectId from query params if present
   const projectIdParam = searchParams?.get('projectId') ?? undefined;
-
-  const uploaderRef = useRef<FileUploaderHandle>(null);
+  
+  // Use the startUpload function from uploadthing
+  const { startUpload } = useUploadThing('assetUploader');
 
   // Initialize form with default values
   const form = useForm<UploadFormValues>({
@@ -132,32 +135,35 @@ function UploadPageContent() {
     form.setValue('fileType', type as keyof typeof ASSET_TYPES);
   };
 
-  // Handle file upload
+  // Handle file upload - store the file but don't upload yet
   const handleFileUpload = (file?: string | File) => {
     if (typeof file === 'string') {
-      form.setValue('fileUrl', file)
+      form.setValue('fileUrl', file);
+      setSelectedFile(null);
     } else if (file) {
-      // here `file` must be a File object
-      const preview = URL.createObjectURL(file)
-      form.setValue('fileUrl', preview)
+      // Store the File object for later upload
+      setSelectedFile(file);
+      const preview = URL.createObjectURL(file);
+      form.setValue('fileUrl', preview);
     } else {
-      form.setValue('fileUrl', '')
+      form.setValue('fileUrl', '');
+      setSelectedFile(null);
     }
-  }
+  };
 
   // Handle form submission
   const onSubmit = async (data: UploadFormValues) => {
     try {
       setIsLoading(true);
       
-      // Trigger upload if there's a file to upload
+      // Only upload if there's a file to upload
       let uploadedUrl = data.fileUrl;
-      if (uploaderRef.current && selectedFileType) {
-        const url = await uploaderRef.current.triggerUpload();
-        if (!url) {
+      if (selectedFile) {
+        const uploadResult = await startUpload([selectedFile]);
+        if (!uploadResult || uploadResult.length === 0) {
           throw new Error('Failed to upload file');
         }
-        uploadedUrl = url;
+        uploadedUrl = uploadResult[0].ufsUrl;
       }
       
       const assetData = {
@@ -225,24 +231,6 @@ function UploadPageContent() {
     }
   };
 
-  // Get the file uploader type based on selected file type
-  const getUploaderType = () => {
-    switch (selectedFileType) {
-      case 'IMAGE':
-        return 'image';
-      case 'AUDIO':
-        return 'audio';
-      case 'VIDEO':
-        return 'video';
-      case 'MODEL_3D':
-        return 'model';
-      case 'DOCUMENT':
-        return 'pdf';
-      default:
-        return 'blob';
-    }
-  };
-
   return (
     <div className="container max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center mb-8">
@@ -307,12 +295,12 @@ function UploadPageContent() {
                   <FormItem>
                     <FormControl>
                       <FileUploader
-                        ref={uploaderRef}
                         endpoint="assetUploader"
                         value={field.value}
                         onChange={handleFileUpload}
                         label={`Upload ${ASSET_TYPE_NAMES[selectedFileType]}`}
                         description={`Select or drag and drop your ${ASSET_TYPE_NAMES[selectedFileType].toLowerCase()} file`}
+                        autoUpload={false}
                       />
                     </FormControl>
                     <FormMessage />
@@ -483,10 +471,10 @@ export default function UploadPage() {
     <Suspense fallback={<div>Loading...</div>}>
       <UploadPageContent />
     </Suspense>
-  )
+  );
 }
 
-// Extra icon component
+// Extra icon components
 const CheckIcon = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

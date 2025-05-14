@@ -10,7 +10,7 @@ import {
 import { Accept, useDropzone, FileRejection } from 'react-dropzone';
 import { UploadCloud, FileIcon, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useUploadThing, uploadFiles } from '@/lib/cloud/uploadthing-client';
+import { useUploadThing } from '@/lib/cloud/uploadthing-client';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -52,12 +52,8 @@ const getAcceptType = (type: FileUploaderProps['fileType']): Accept | undefined 
   }
 };
 
-export interface FileUploaderHandle {
-  triggerUpload: () => Promise<string | null>;
-}
-
 export const FileUploader = React.forwardRef<
-  FileUploaderHandle,
+  { selectedFile: File | null },
   FileUploaderProps
 >(function FileUploader(
   {
@@ -168,73 +164,9 @@ export const FileUploader = React.forwardRef<
       
       // Notify parent component
       onChange(file);
-      
-      // If autoUpload is true, upload immediately (legacy behavior)
-      if (autoUpload) {
-        await uploadFile(file);
-      }
     },
-    [fileType, maxSize, onChange, autoUpload]
+    [fileType, maxSize, onChange]
   );
-
-  // Separate upload function that can be called manually
-  const uploadFile = async (fileToUpload: File): Promise<string | null> => {
-    setIsUploading(true);
-    setUploadProgress(0);
-    
-    try {
-      // Start upload using uploadFiles
-      const res = await uploadFiles(endpoint, {
-        files: [fileToUpload],
-        onUploadProgress: ({ progress }) => setUploadProgress(progress),
-      });
-      
-      if (res && res[0]) {
-        const uploadedFile = res[0];
-        const url = uploadedFile.ufsUrl;
-        
-        onChange(url);
-        setPreview(url);
-        setFileName(uploadedFile.name);
-        setUploadSuccess(true);
-        setSelectedFile(null); // Clear the file since it's uploaded
-        
-        if (onUploadComplete) {
-          onUploadComplete(url);
-        }
-        
-        // Reset success message after a delay
-        setTimeout(() => {
-          setUploadSuccess(false);
-        }, 3000);
-        
-        return url; // Return the uploaded URL
-      }
-      return null;
-    } catch (error: any) {
-      setUploadError(error.message || 'Upload failed');
-      console.error('Upload error:', error);
-      if (onUploadError) {
-        onUploadError(error);
-      }
-      
-      // Reset error message after a delay
-      setTimeout(() => {
-        setUploadError(null);
-      }, 5000);
-      throw error; // Re-throw for caller to handle
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Public method to trigger upload manually
-  const triggerUpload = useCallback(async (): Promise<string | null> => {
-    if (selectedFile && !isUploading) {
-      return await uploadFile(selectedFile);
-    }
-    return typeof value === 'string' ? value : null;
-  }, [selectedFile, isUploading, value]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
@@ -253,12 +185,10 @@ export const FileUploader = React.forwardRef<
     onChange(undefined);
   };
 
-  // Get friendly file size display
-  const formatFileSize = (sizeInBytes: number) => {
-    if (sizeInBytes < 1024) return `${sizeInBytes} B`;
-    if (sizeInBytes < 1024 * 1024) return `${(sizeInBytes / 1024).toFixed(1)} KB`;
-    return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  // Expose the selected file to parent components
+  React.useImperativeHandle(ref, () => ({
+    selectedFile,
+  }));
 
   // Get display text for file types
   const getFileTypeLabel = () => {
@@ -325,18 +255,12 @@ export const FileUploader = React.forwardRef<
     }
   };
 
-  React.useImperativeHandle(ref, () => ({
-    triggerUpload,
-  }));
-
-  // Expose uploadFile method to parent components
-  useEffect(() => {
-    // Attach the triggerUpload method to the component instance
-    // This allows parent components to call it manually
-    if (onChange && typeof onChange === 'function') {
-      (onChange as any).triggerUpload = triggerUpload;
-    }
-  }, [onChange, triggerUpload]);
+  // Get friendly file size display
+  const formatFileSize = (sizeInBytes: number) => {
+    if (sizeInBytes < 1024) return `${sizeInBytes} B`;
+    if (sizeInBytes < 1024 * 1024) return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+    return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <div className={cn('w-full space-y-2', className)}>
