@@ -147,22 +147,31 @@ export default function ProfileSettingsPage() {
     
     try {
       // Trigger uploads if there are files to upload
+      let profileImageUrl = profileImagePreview;
+      let bannerImageUrl = bannerImagePreview;
+      
       if (profileImageUploaderRef.current) {
-        await profileImageUploaderRef.current.triggerUpload();
+        const uploadedUrl = await profileImageUploaderRef.current.triggerUpload();
+        if (uploadedUrl) {
+          profileImageUrl = uploadedUrl;
+        }
       }
       
       if (bannerImageUploaderRef.current) {
-        await bannerImageUploaderRef.current.triggerUpload();
+        const uploadedUrl = await bannerImageUploaderRef.current.triggerUpload();
+        if (uploadedUrl) {
+          bannerImageUrl = uploadedUrl;
+        }
       }
       
       // Update user profile
       const profileData = {
         ...data,
-        image: profileImagePreview,
-        bannerImage: bannerImagePreview,
+        image: profileImageUrl,
+        bannerImage: bannerImageUrl,
       };
       
-      await api.users.updateProfile(profileData);
+      const updatedUser = await api.users.updateProfile(profileData);
       
       // Update session with new user data
       if (update) {
@@ -170,9 +179,9 @@ export default function ProfileSettingsPage() {
           ...session,
           user: {
             ...session.user,
-            name: data.name,
-            username: data.username,
-            image: profileImagePreview,
+            name: updatedUser.name,
+            username: updatedUser.username,
+            image: updatedUser.image,
           },
         });
       }

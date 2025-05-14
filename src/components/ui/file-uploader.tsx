@@ -53,7 +53,7 @@ const getAcceptType = (type: FileUploaderProps['fileType']): Accept | undefined 
 };
 
 export interface FileUploaderHandle {
-  triggerUpload: () => Promise<void>;
+  triggerUpload: () => Promise<string | null>;
 }
 
 export const FileUploader = React.forwardRef<
@@ -178,7 +178,7 @@ export const FileUploader = React.forwardRef<
   );
 
   // Separate upload function that can be called manually
-  const uploadFile = async (fileToUpload: File) => {
+  const uploadFile = async (fileToUpload: File): Promise<string | null> => {
     setIsUploading(true);
     setUploadProgress(0);
     
@@ -207,7 +207,10 @@ export const FileUploader = React.forwardRef<
         setTimeout(() => {
           setUploadSuccess(false);
         }, 3000);
+        
+        return url; // Return the uploaded URL
       }
+      return null;
     } catch (error: any) {
       setUploadError(error.message || 'Upload failed');
       console.error('Upload error:', error);
@@ -219,17 +222,19 @@ export const FileUploader = React.forwardRef<
       setTimeout(() => {
         setUploadError(null);
       }, 5000);
+      throw error; // Re-throw for caller to handle
     } finally {
       setIsUploading(false);
     }
   };
 
   // Public method to trigger upload manually
-  const triggerUpload = useCallback(async () => {
+  const triggerUpload = useCallback(async (): Promise<string | null> => {
     if (selectedFile && !isUploading) {
-      await uploadFile(selectedFile);
+      return await uploadFile(selectedFile);
     }
-  }, [selectedFile, isUploading]);
+    return typeof value === 'string' ? value : null;
+  }, [selectedFile, isUploading, value]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,

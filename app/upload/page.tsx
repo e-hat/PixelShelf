@@ -149,15 +149,25 @@ function UploadPageContent() {
   const onSubmit = async (data: UploadFormValues) => {
     try {
       setIsLoading(true);
-      await uploaderRef.current?.triggerUpload();
+      
+      // Trigger upload if there's a file to upload
+      let uploadedUrl = data.fileUrl;
+      if (uploaderRef.current && selectedFileType) {
+        const url = await uploaderRef.current.triggerUpload();
+        if (!url) {
+          throw new Error('Failed to upload file');
+        }
+        uploadedUrl = url;
+      }
+      
       const assetData = {
         title: data.title,
         description: data.description || '',
-        fileUrl: data.fileUrl,
+        fileUrl: uploadedUrl,
         fileType: data.fileType,
         projectId: data.projectId || undefined,
         isPublic: data.isPublic,
-        tags: Array.isArray(data.tags) ? data.tags : [],
+        tags: data.tags?.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean) || [],
       };
       
       const response = await api.assets.create(assetData);

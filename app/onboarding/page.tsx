@@ -24,7 +24,13 @@ import {
   Music,
   Code
 } from 'lucide-react';
-import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { 
+  Form, 
+  FormControl, 
+  FormField, 
+  FormItem, 
+  FormMessage 
+} from '@/components/ui/form';
 import { FileUploader, FileUploaderHandle } from '@/components/ui/file-uploader';
 
 const onboardingSchema = z.object({
@@ -57,17 +63,10 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stage, setStage] = useState(1);
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | undefined>(undefined);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    formState: { errors },
-  } = useForm<OnboardingFormValues>({
+  const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
     mode: 'onChange',
     defaultValues: {
@@ -87,35 +86,23 @@ export default function OnboardingPage() {
     }
   }, [session, profileImagePreview]);
 
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    // Check file size (limit to 2MB)
-    if (selectedFile.size > 2 * 1024 * 1024) {
-      toast.error('Profile image must be less than 2MB');
-      return;
+  const handleProfileImageChange = (value?: File | string) => {
+    if (value instanceof File) {
+      setProfileImage(value);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setProfileImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(value);
+    } else if (typeof value === 'string') {
+      setProfileImagePreview(value);
+      form.setValue('profileImage', value);
     }
-
-    // Check file type
-    if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Only image files are allowed');
-      return;
-    }
-
-    setProfileImage(selectedFile);
-
-    // Create image preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setProfileImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
   };
 
   const handleSelectRole = (roleId: string) => {
     setSelectedRole(roleId);
-    setValue('role', roleId);
+    form.setValue('role', roleId);
   };
 
   const onSubmit = async (data: OnboardingFormValues) => {
@@ -123,8 +110,12 @@ export default function OnboardingPage() {
     
     try {
       // Trigger upload if there's a file to upload
-      if (fileUploaderRef.current) {
-        await fileUploaderRef.current.triggerUpload();
+      let profileImageUrl = data.profileImage;
+      if (fileUploaderRef.current && profileImage) {
+        const uploadedUrl = await fileUploaderRef.current.triggerUpload();
+        if (uploadedUrl) {
+          profileImageUrl = uploadedUrl;
+        }
       }
       
       // First update the user profile on the server
@@ -136,7 +127,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           username: data.username,
           bio: data.bio || '',
-          image: data.profileImage, // Include the uploaded image URL
+          image: profileImageUrl,
         }),
       });
       
@@ -145,14 +136,16 @@ export default function OnboardingPage() {
         throw new Error(errorData.error || 'Failed to update profile');
       }
       
+      const updatedUser = await response.json();
+      
       // Update the session with the new data
       if (update) {
         await update({
           ...session,
           user: {
             ...session?.user,
-            username: data.username,
-            image: data.profileImage || session?.user?.image,
+            username: updatedUser.username,
+            image: updatedUser.image || session?.user?.image,
           },
         });
       }
@@ -205,189 +198,217 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          {/* Stage 1: Profile Photo */}
-          {stage === 1 && (
-            <div className="space-y-6">
-              <div className="flex flex-col items-center">
-                <FormField
-                  control={control}
-                  name="profileImage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <FileUploader
-                          ref={fileUploaderRef}
-                          endpoint="profileImage"
-                          value={field.value}
-                          onChange={field.onChange}
-                          maxSizeMB={4}
-                          label="Upload profile photo"
-                          description="JPG, PNG or GIF. 4MB max."
-                          className="max-w-md mx-auto"
-                          autoUpload={false} // Disable auto-upload
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {/* Stage 1: Profile Photo */}
+            {stage === 1 && (
+              <div className="space-y-6">
+                <div className="flex flex-col items-center">
+                  <FormField
+                    control={form.control}
+                    name="profileImage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <FileUploader
+                            ref={fileUploaderRef}
+                            endpoint="profileImage"
+                            value={profileImagePreview}
+                            onChange={handleProfileImageChange}
+                            maxSizeMB={4}
+                            label="Upload profile photo"
+                            description="JPG, PNG or GIF. 4MB max."
+                            className="max-w-md mx-auto"
+                            autoUpload={false}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <div className="text-center mt-8">
-                <Button 
-                  type="button" 
-                  onClick={() => setStage(2)} 
-                  variant="pixel"
-                  className="min-w-[150px]"
-                >
-                  Continue
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  You can also skip and add a photo later
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Stage 2: Basic Info */}
-          {stage === 2 && (
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="username" className="text-sm font-medium">
-                    Username <span className="text-destructive">*</span>
-                  </label>
-                  <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-                      @
-                    </span>
-                    <Input 
-                      id="username" 
-                      {...register('username')} 
-                      className="rounded-l-none"
-                      placeholder="your_username"
-                    />
-                  </div>
-                  {errors.username && (
-                    <p className="text-sm text-destructive">{errors.username.message}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    This will be your unique identifier on PixelShelf
+                <div className="text-center mt-8">
+                  <Button 
+                    type="button" 
+                    onClick={() => setStage(2)} 
+                    variant="pixel"
+                    className="min-w-[150px]"
+                  >
+                    Continue
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    You can also skip and add a photo later
                   </p>
                 </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="bio" className="text-sm font-medium">
-                    Bio
-                  </label>
-                  <Textarea 
-                    id="bio" 
-                    {...register('bio')} 
-                    rows={4}
-                    placeholder="Tell other game developers about yourself and your work..."
-                  />
-                  {errors.bio && (
-                    <p className="text-sm text-destructive">{errors.bio.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="website" className="text-sm font-medium">
-                    Website (optional)
-                  </label>
-                  <Input 
-                    id="website" 
-                    {...register('website')} 
-                    placeholder="example.com"
-                  />
-                </div>
               </div>
+            )}
 
-              <div className="flex justify-between mt-8">
-                <Button 
-                  type="button" 
-                  onClick={() => setStage(1)} 
-                  variant="outline"
-                >
-                  Back
-                </Button>
-                <Button 
-                  type="button" 
-                  onClick={() => setStage(3)} 
-                  variant="pixel"
-                  disabled={!!errors.username || !!errors.bio}
-                >
-                  Continue
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Stage 3: Role */}
-          {stage === 3 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">What best describes you?</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {ROLES.map((role) => (
-                    <div 
-                      key={role.id}
-                      className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                        selectedRole === role.id 
-                          ? 'bg-pixelshelf-light border-pixelshelf-primary' 
-                          : 'hover:border-pixelshelf-light'
-                      }`}
-                      onClick={() => handleSelectRole(role.id)}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className={`p-2 rounded-full ${
-                          selectedRole === role.id 
-                            ? 'bg-pixelshelf-primary text-white' 
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          <role.icon className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{role.label}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {role.description}
+            {/* Stage 2: Basic Info */}
+            {stage === 2 && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="space-y-2">
+                          <label htmlFor="username" className="text-sm font-medium">
+                            Username <span className="text-destructive">*</span>
+                          </label>
+                          <div className="flex">
+                            <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                              @
+                            </span>
+                            <FormControl>
+                              <Input 
+                                {...field}
+                                id="username"
+                                className="rounded-l-none"
+                                placeholder="your_username"
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                          <p className="text-xs text-muted-foreground">
+                            This will be your unique identifier on PixelShelf
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="bio"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="space-y-2">
+                          <label htmlFor="bio" className="text-sm font-medium">
+                            Bio
+                          </label>
+                          <FormControl>
+                            <Textarea 
+                              {...field}
+                              id="bio"
+                              rows={4}
+                              placeholder="Tell other game developers about yourself and your work..."
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="website"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="space-y-2">
+                          <label htmlFor="website" className="text-sm font-medium">
+                            Website (optional)
+                          </label>
+                          <FormControl>
+                            <Input 
+                              {...field}
+                              id="website"
+                              placeholder="example.com"
+                            />
+                          </FormControl>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="flex justify-between mt-8">
+                  <Button 
+                    type="button" 
+                    onClick={() => setStage(1)} 
+                    variant="outline"
+                  >
+                    Back
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={() => setStage(3)} 
+                    variant="pixel"
+                    disabled={!!form.formState.errors.username || !!form.formState.errors.bio}
+                  >
+                    Continue
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </div>
               </div>
+            )}
 
-              <div className="flex justify-between mt-8">
-                <Button 
-                  type="button" 
-                  onClick={() => setStage(2)} 
-                  variant="outline"
-                >
-                  Back
-                </Button>
-                <Button 
-                  type="submit" 
-                  variant="pixel"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Setting up...
-                    </>
-                  ) : (
-                    'Complete Setup'
-                  )}
-                </Button>
+            {/* Stage 3: Role */}
+            {stage === 3 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium mb-4">What best describes you?</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {ROLES.map((role) => (
+                      <div 
+                        key={role.id}
+                        className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                          selectedRole === role.id 
+                            ? 'bg-pixelshelf-light border-pixelshelf-primary' 
+                            : 'hover:border-pixelshelf-light'
+                        }`}
+                        onClick={() => handleSelectRole(role.id)}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className={`p-2 rounded-full ${
+                            selectedRole === role.id 
+                              ? 'bg-pixelshelf-primary text-white' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            <role.icon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{role.label}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {role.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between mt-8">
+                  <Button 
+                    type="button" 
+                    onClick={() => setStage(2)} 
+                    variant="outline"
+                  >
+                    Back
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    variant="pixel"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Setting up...
+                      </>
+                    ) : (
+                      'Complete Setup'
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-        </form>
+            )}
+          </form>
+        </Form>
       </div>
     </div>
   );
