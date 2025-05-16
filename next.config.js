@@ -18,6 +18,12 @@ const nextConfig = {
   experimental: {
     serverActions: {},
   },
+  webpack: (config, { dev, isServer }) => {
+    if (dev) {
+      config.devtool = 'eval-source-map';
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

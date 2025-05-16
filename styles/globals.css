@@ -226,7 +226,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-/* Animate sidecards sliding in and out */
+/* Animate sidecards sliding in */
 @keyframes slide-in-left {
   from { transform: translateX(-100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -237,34 +237,15 @@
   to { transform: translateX(0); opacity: 1; }
 }
 
-@keyframes slide-out-left {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(-100%); opacity: 0; }
-}
-
-@keyframes slide-out-right {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(100%); opacity: 0; }
-}
-
 /* Show sidecards animations */
 .home-feed-layout.show-sidecards .left-sidebar {
-  animation: slide-in-left 0.3s ease forwards;
+  animation: slide-in-left 0.2s ease-out forwards;
   display: block;
 }
 
 .home-feed-layout.show-sidecards .right-sidebar {
-  animation: slide-in-right 0.3s ease forwards;
+  animation: slide-in-right 0.2s ease-out forwards;
   display: block;
-}
-
-/* Hide sidecards animations */
-.home-feed-layout.hide-sidecards .left-sidebar {
-  animation: slide-out-left 0.3s ease forwards;
-}
-
-.home-feed-layout.hide-sidecards .right-sidebar {
-  animation: slide-out-right 0.3s ease forwards;
 }
 
 /* After animation completes, hide sidecards completely */
@@ -282,7 +263,7 @@
 
 /* Transition for grid layout changes */
 .home-feed-main {
-  transition: max-width 0.3s ease;
+  transition: max-width 0.2s ease-out;
 }
 
 .aspect-game-card {

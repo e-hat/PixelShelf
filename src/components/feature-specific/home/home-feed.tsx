@@ -80,17 +80,11 @@ export default function HomeFeed() {
     setViewMode(mode);
     
     if (mode === 'list') {
-      // First set the correct class to trigger animations
       setLayoutClass('show-sidecards');
-      // Then update the state
       setShowSidecards(true);
     } else {
-      // First set the correct class to trigger animations
       setLayoutClass('hide-sidecards');
-      // Then update the state
-      setTimeout(() => {
-        setShowSidecards(false);
-      }, 300); // Wait for animation to complete
+      setShowSidecards(false);
     }
   };
   

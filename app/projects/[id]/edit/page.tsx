@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -50,9 +50,8 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
   const [project, setProject] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const thumbnailFileRef = useRef<File | null>(null);
 
-  // Use the startUpload function from uploadthing
   const { startUpload } = useUploadThing('projectImage');
 
   const form = useForm<FormValues>({
@@ -66,7 +65,6 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
   });
 
   useEffect(() => {
-    // because this is a client component, we can still do side-effects
     async function fetchProject() {
       if (status === "unauthenticated") {
         router.push("/login");
@@ -78,13 +76,14 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
 
       try {
         const projectData = await api.projects.getById(id);
-        setProject(projectData);
 
         if (session?.user?.id !== projectData.userId) {
           toast.error("You do not have permission to edit this project");
           router.push(`/u/${projectData.user.username}/projects/${id}`);
           return;
         }
+
+        setProject(projectData);
 
         form.reset({
           title: projectData.title,
@@ -108,26 +107,30 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
     fetchProject();
   }, [id, router, session, status, form]);
 
-  const handleThumbnailChange = (value?: File | string) => {
+  const handleThumbnailChange = useCallback((value?: File | string) => {
     if (value instanceof File) {
-      setThumbnailFile(value);
-      // Create preview URL
-      const preview = URL.createObjectURL(value);
-      form.setValue('thumbnail', preview);
+      thumbnailFileRef.current = value
+      const objectUrl = URL.createObjectURL(value);
+      form.setValue('thumbnail', objectUrl);
     } else if (typeof value === 'string') {
+      thumbnailFileRef.current = null;
       form.setValue('thumbnail', value);
-      setThumbnailFile(null);
+    } else {
+      thumbnailFileRef.current = null
+      form.setValue('thumbnail', '');
     }
-  };
+  }, [form]);
 
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Upload thumbnail if there's a file to upload
       let thumbnailUrl = values.thumbnail;
-      if (thumbnailFile) {
-        const uploadResult = await startUpload([thumbnailFile]);
-        if (uploadResult && uploadResult[0]) {
+      const file = thumbnailFileRef.current;
+
+      if (file) {
+        const uploadResult = await startUpload([file]);
+
+        if (uploadResult && uploadResult.length > 0) {
           thumbnailUrl = uploadResult[0].ufsUrl;
         }
       }
@@ -138,6 +141,7 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
         thumbnail: thumbnailUrl,
         isPublic: values.isPublic,
       });
+      
       toast.success("Project updated successfully");
       router.push(
         session?.user?.username
@@ -184,7 +188,11 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
       <h1 className="text-3xl font-bold mb-8">Edit Project</h1>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form
+          className="space-y-8"
+          onSubmit={(e) => e.preventDefault()}
+          noValidate
+        >
           {/* title */}
           <FormField
             control={form.control}
@@ -225,11 +233,11 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
             name="thumbnail"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Project Thumbnail</FormLabel>
                 <FormControl>
                   <FileUploader
                     endpoint="projectImage"
                     value={field.value}
+                    label="Project Thumbnail"
                     onChange={handleThumbnailChange}
                     fileType="image"
                     autoUpload={false}
@@ -281,7 +289,11 @@ export default function EditProjectPage({ params }: EditProjectPageProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="button"
+              onClick={form.handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

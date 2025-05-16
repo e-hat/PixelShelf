@@ -1,0 +1,79 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Next.js: debug server-side",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}",
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "name": "Next.js: debug client-side",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${webRoot}/*",
+        "webpack:///**": "${webRoot}/*",
+        "webpack:///./~/*": "${webRoot}/node_modules/*",
+        "webpack:///src/*": "${webRoot}/*",
+        "/./*": "${webRoot}/*"
+      }
+    },
+    {
+      "name": "Next.js: debug full stack",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "serverReadyAction": {
+        "pattern": "started server on .+, url: (https?://.+)",
+        "uriFormat": "%s",
+        "action": "debugWithChrome",
+        "webRoot": "${workspaceFolder}",
+        "sourceMapPathOverrides": {
+          "webpack://_N_E/*": "${webRoot}/*",
+          "webpack:///**": "${webRoot}/*"
+        }
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Next.js with Turbopack",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "preLaunchTask": "npm: dev",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${webRoot}/*",
+        "webpack:///*/*": "${webRoot}/*",
+        "webpack:///**": "${webRoot}/*",
+        "webpack:///src/*": "${webRoot}/*",
+        "/./*": "${webRoot}/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Next.js: debug all",
+      "configurations": ["Next.js: debug server-side", "Next.js: debug client-side"]
+    }
+  ]
+}
