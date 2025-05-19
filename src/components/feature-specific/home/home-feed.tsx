@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { 
@@ -17,7 +18,10 @@ import {
   ArrowUpRight, 
   Bell, 
   FileText, 
-  FolderKanban
+  FolderKanban,
+  Heart,
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DashboardFeed, TabOption } from '@/components/feature-specific/dashboard-feed';
@@ -26,19 +30,31 @@ import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/shared/user-avatar';
 import { Separator } from '@/components/ui/separator';
 import { api } from '@/lib/api/api-client';
-import { Asset, UserProfile } from '@/types';
-import { formatDate } from '@/lib/utils';
+import { Asset, UserProfile, Notification } from '@/types';
+import { formatDate, getRelativeTime } from '@/lib/utils';
 import { HomeFeedSkeleton } from './home-feed-skeleton';
+import { useUserStats } from '@/hooks/use-user-stats';
+import { useNotificationsQuery } from '@/hooks/use-notifications-query';
+import FollowButton from '@/components/feature-specific/follow-button';
 
 export default function HomeFeed() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [trendingCreators, setTrendingCreators] = useState<UserProfile[]>([]);
   const [popularTags, setPopularTags] = useState<{name: string, count: number}[]>([]);
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showSidecards, setShowSidecards] = useState(true);
   const [layoutClass, setLayoutClass] = useState('show-sidecards');
+  
+  // Fetch user stats
+  const { data: userProfile, isLoading: isLoadingUserStats } = useUserStats();
+  
+  // Fetch notifications for recent activity
+  const { notifications, isLoading: isLoadingNotifications } = useNotificationsQuery({
+    limit: 5,
+    enabled: !!session
+  });
   
   // Fetch sidebar data
   useEffect(() => {
@@ -50,21 +66,49 @@ export default function HomeFeed() {
         const creatorsResponse = await api.users.getTrendingCreators(3);
         setTrendingCreators(creatorsResponse.users || []);
         
-        // For popular tags, we'll simulate this with static data for now
-        setPopularTags([
-          { name: 'pixel-art', count: 253 },
-          { name: '3d-models', count: 187 },
-          { name: 'gamedev', count: 165 },
-          { name: 'vfx', count: 122 },
-          { name: 'unity', count: 98 },
-        ]);
-        
-        // For recent activity, we'll simulate this with static data
-        setRecentActivity([
-          { type: 'like', user: 'Jane Cooper', content: 'liked your project "Pixel RPG Assets"', time: '2h ago' },
-          { type: 'follow', user: 'Alex Johnson', content: 'started following you', time: '4h ago' },
-          { type: 'comment', user: 'Mark Stevens', content: 'commented on your asset "Forest Tileset"', time: '1d ago' },
-        ]);
+        // Fetch popular tags
+        try {
+          // First try to get tags from assets
+          const assetsResponse = await api.assets.getAll({
+            limit: 100,
+            sort: 'popular'
+          });
+          
+          // Process tags from assets to find the most common ones
+          const tagCounts: Record<string, number> = {};
+          
+          assetsResponse.assets?.forEach((asset: { tags: any[]; }) => {
+            if (asset.tags && Array.isArray(asset.tags)) {
+              asset.tags.forEach(tag => {
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+              });
+            }
+          });
+          
+          // Convert to array and sort by count
+          const sortedTags = Object.entries(tagCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10); // Take top 10
+            
+          setPopularTags(sortedTags.length > 0 ? sortedTags : [
+            { name: 'pixel-art', count: 253 },
+            { name: '3d-models', count: 187 },
+            { name: 'gamedev', count: 165 },
+            { name: 'vfx', count: 122 },
+            { name: 'unity', count: 98 },
+          ]);
+        } catch (error) {
+          console.error('Error fetching popular tags:', error);
+          // Fallback to static data if API fails
+          setPopularTags([
+            { name: 'pixel-art', count: 253 },
+            { name: '3d-models', count: 187 },
+            { name: 'gamedev', count: 165 },
+            { name: 'vfx', count: 122 },
+            { name: 'unity', count: 98 },
+          ]);
+        }
       } catch (error) {
         console.error('Error fetching sidebar data:', error);
       } finally {
@@ -80,11 +124,17 @@ export default function HomeFeed() {
     setViewMode(mode);
     
     if (mode === 'list') {
+      // First set the correct class to trigger animations
       setLayoutClass('show-sidecards');
+      // Then update the state
       setShowSidecards(true);
     } else {
+      // First set the correct class to trigger animations
       setLayoutClass('hide-sidecards');
-      setShowSidecards(false);
+      // Then update the state
+      setTimeout(() => {
+        setShowSidecards(false);
+      }, 300); // Wait for animation to complete
     }
   };
   
@@ -118,6 +168,24 @@ export default function HomeFeed() {
     </div>
   );
 
+  // Get notification icon based on type
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'FOLLOW':
+        return <UserCheck className="h-3 w-3" />;
+      case 'LIKE':
+        return <Heart className="h-3 w-3" />;
+      case 'COMMENT':
+        return <MessageSquare className="h-3 w-3" />;
+      case 'MESSAGE':
+        return <MessageSquare className="h-3 w-3" />;
+      case 'SYSTEM':
+        return <Bell className="h-3 w-3" />;
+      default:
+        return <Bell className="h-3 w-3" />;
+    }
+  };
+
   // Left sidebar: User profile card and quick actions
   const LeftSidebar = () => (
     <div className="home-feed-sidebar left-sidebar">
@@ -134,15 +202,15 @@ export default function HomeFeed() {
           
           <div className="flex justify-around w-full mb-4">
             <div className="text-center">
-              <p className="font-semibold">0</p>
+              <p className="font-semibold">{userProfile?.stats?.followers || 0}</p>
               <p className="text-xs text-muted-foreground">Followers</p>
             </div>
             <div className="text-center">
-              <p className="font-semibold">0</p>
+              <p className="font-semibold">{userProfile?.stats?.following || 0}</p>
               <p className="text-xs text-muted-foreground">Following</p>
             </div>
             <div className="text-center">
-              <p className="font-semibold">0</p>
+              <p className="font-semibold">{userProfile?.stats?.assets || 0}</p>
               <p className="text-xs text-muted-foreground">Assets</p>
             </div>
           </div>
@@ -185,7 +253,7 @@ export default function HomeFeed() {
           {popularTags.map(tag => (
             <Link 
               key={tag.name} 
-              href={`/search?tag=${tag.name}`}
+              href={`/explore?tag=${tag.name}`}
               className="text-xs bg-muted hover:bg-accent px-2 py-1 rounded-full transition-colors"
             >
               #{tag.name}
@@ -211,51 +279,78 @@ export default function HomeFeed() {
         </div>
         
         <div className="space-y-3">
-          {trendingCreators.map(creator => (
-            <Link 
-              key={creator.id} 
-              href={`/u/${creator.username}`}
-              className="flex items-center p-2 hover:bg-muted rounded-md transition-colors"
-            >
-              <UserAvatar user={creator} size="sm" />
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="font-medium text-sm">{creator.name}</p>
-                <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
-              </div>
-              <Button size="sm" variant="outline" className="ml-2 text-xs h-8">
-                Follow
-              </Button>
-            </Link>
-          ))}
+          {trendingCreators && trendingCreators.length > 0 ? (
+            trendingCreators.map(creator => (
+              <Link 
+                key={creator.id} 
+                href={`/u/${creator.username}`}
+                className="flex items-center p-2 hover:bg-muted rounded-md transition-colors"
+              >
+                <UserAvatar user={creator} size="sm" />
+                <div className="ml-3 flex-1 min-w-0">
+                  <p className="font-medium text-sm">{creator.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
+                </div>
+                <FollowButton 
+                  userId={creator.id}
+                  isFollowing={creator.isFollowing || false}
+                  size="sm" 
+                  variant="outline"
+                  className="ml-2 text-xs h-8"
+                />
+              </Link>
+            ))
+          ) : (
+            <div className="text-center py-2">
+              <p className="text-sm text-muted-foreground">No trending creators yet</p>
+            </div>
+          )}
         </div>
       </div>
       
       {/* Recent Activity */}
       <div className="sidebar-card">
-        <h3 className="font-semibold mb-3">Recent Activity</h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-semibold">Recent Activity</h3>
+          <Link href="/notifications" className="text-xs text-pixelshelf-primary hover:underline flex items-center">
+            See all
+            <ArrowUpRight className="h-3 w-3 ml-1" />
+          </Link>
+        </div>
         
-        {recentActivity.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No recent activity to show
-          </p>
-        ) : (
+        {isLoadingNotifications ? (
+          <div className="py-4 flex justify-center">
+            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : notifications && notifications.length > 0 ? (
           <div className="space-y-3">
-            {recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-start">
+            {notifications.slice(0, 5).map((notification: Notification) => (
+              <Link 
+                key={notification.id} 
+                href={notification.linkUrl || '/notifications'}
+                className="flex items-start"
+              >
                 <div className="rounded-full bg-muted p-2 mr-3">
-                  {activity.type === 'like' && <Star className="h-3 w-3" />}
-                  {activity.type === 'follow' && <UserCheck className="h-3 w-3" />}
-                  {activity.type === 'comment' && <FileText className="h-3 w-3" />}
+                  {getNotificationIcon(notification.type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm leading-tight">
-                    <span className="font-medium">{activity.user}</span> {activity.content}
+                    {notification.sender?.name && (
+                      <span className="font-medium">{notification.sender.name} </span>
+                    )}
+                    {notification.content}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {getRelativeTime(notification.createdAt)}
+                  </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No recent activity to show
+          </p>
         )}
       </div>
       

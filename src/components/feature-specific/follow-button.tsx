@@ -1,4 +1,4 @@
-// src/components/feature-specific/follow-button.tsx - Enhanced for production use
+// src/components/feature-specific/follow-button.tsx
 
 'use client';
 
@@ -6,9 +6,10 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, UserPlus, UserCheck as UserCheckIcon } from 'lucide-react';
 import { Button, ButtonProps } from '@/components/ui/button';
 import { useFollowUserMutation, useUnfollowUserMutation } from '@/hooks/use-user-profile-query';
+import { cn } from '@/lib/utils';
 
 interface FollowButtonProps extends Omit<ButtonProps, 'onClick'> {
   userId: string;
@@ -16,6 +17,7 @@ interface FollowButtonProps extends Omit<ButtonProps, 'onClick'> {
   onFollowChange?: (isFollowing: boolean) => void;
   size?: 'sm' | 'lg' | 'default'; 
   showIcon?: boolean;
+  showText?: boolean;
 }
 
 export default function FollowButton({ 
@@ -25,6 +27,7 @@ export default function FollowButton({
   variant = 'pixel',
   size = 'default',
   showIcon = false,
+  showText = true,
   className,
   ...props
 }: FollowButtonProps) {
@@ -47,6 +50,7 @@ export default function FollowButton({
   const handleFollow = async () => {
     if (!session) {
       // Redirect to login if not authenticated
+      toast.error('Please sign in to follow users');
       router.push('/login');
       return;
     }
@@ -89,51 +93,22 @@ export default function FollowButton({
       onClick={handleFollow}
       variant={isFollowing ? 'outline' : variant}
       size={size}
-      className={className}
+      className={cn("min-w-[80px]", className)}
       disabled={isLoading}
       {...props}
     >
       {isLoading ? (
         <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          {isFollowing ? 'Unfollowing...' : 'Following...'}
+          <Loader2 className="h-4 w-4 animate-spin" />
         </>
       ) : (
         <>
-          {showIcon && isFollowing && (
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="mr-2 h-4 w-4"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <polyline points="16 11 18 13 22 9" />
-            </svg>
+          {showIcon && (
+            isFollowing ? 
+              <UserCheckIcon className="h-4 w-4 mr-2" /> : 
+              <UserPlus className="h-4 w-4 mr-2" />
           )}
-          {showIcon && !isFollowing && (
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="mr-2 h-4 w-4"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" x2="19" y1="8" y2="14" />
-              <line x1="16" x2="22" y1="11" y2="11" />
-            </svg>
-          )}
-          {isFollowing ? 'Following' : 'Follow'}
+          {showText && (isFollowing ? 'Following' : 'Follow')}
         </>
       )}
     </Button>

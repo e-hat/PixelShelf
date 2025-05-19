@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNotificationsQuery } from '@/hooks/use-notifications-query';
 
 interface NotificationIndicatorProps {
   className?: string;
@@ -12,44 +13,27 @@ interface NotificationIndicatorProps {
 
 export default function NotificationIndicator({ className }: NotificationIndicatorProps) {
   const { data: session, status } = useSession();
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Use our React Query hook to fetch unread notifications
+  const { unreadCount, refetch } = useNotificationsQuery({
+    unreadOnly: true,
+    limit: 1, // We only need the count, not actual notifications
+    enabled: status === 'authenticated'
+  });
 
-  // Fetch unread notification count
-  const fetchUnreadCount = useCallback(async () => {
-    if (!session) return;
-    
-    try {
-      const response = await fetch('/api/notifications?limit=1&unreadOnly=true');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications');
-      }
-      
-      const data = await response.json();
-      setUnreadCount(data.unreadCount);
-    } catch (err) {
-      console.error('Error fetching unread count:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session]);
-
-  // Fetch notifications on mount and set up a polling interval
+  // Periodically check for new notifications
   useEffect(() => {
     if (status === 'authenticated') {
-      fetchUnreadCount();
-      
       // Poll for new notifications every minute
-      const interval = setInterval(fetchUnreadCount, 60000);
+      const interval = setInterval(() => {
+        refetch();
+      }, 60000);
       
       return () => clearInterval(interval);
-    } else {
-      setIsLoading(false);
     }
-  }, [status, session, fetchUnreadCount]);
+  }, [status, refetch]);
 
-  if (status !== 'authenticated' || isLoading) {
+  if (status !== 'authenticated') {
     return (
       <Link href="/notifications" className={cn("relative text-foreground hover:text-pixelshelf-primary", className)}>
         <Bell className="h-5 w-5" />

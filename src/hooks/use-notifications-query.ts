@@ -51,27 +51,32 @@ export function useNotificationsQuery(options?: NotificationQueryOptions) {
         unreadOnly,
       }),
     enabled: userEnabled,
+    staleTime: 30000, // 30 seconds - for notifications we want relatively fresh data
   });
 
-  // Sync unread count
+  // Sync unread count to global store
   useEffect(() => {
-    if (query.isSuccess && query.data) {
+    if (query.isSuccess && query.data && (unreadOnly || query.data.unreadCount !== undefined)) {
       setUnreadCount(query.data.unreadCount);
     }
-  }, [query.isSuccess, query.data, setUnreadCount]);
+  }, [query.isSuccess, query.data, setUnreadCount, unreadOnly]);
 
+  // Extract data for convenience
   const notifications = query.data?.notifications ?? [];
   const unreadCount = query.data?.unreadCount ?? 0;
   const pagination = query.data?.pagination;
   const hasMore = Boolean(pagination && pagination.page < pagination.totalPages);
+  
+  // For compatibility with infinite query
   const loadMore = () => Promise.resolve(); // No-op for compatibility
+  const isLoadingMore = false;
 
   return {
     notifications,
     unreadCount,
     pagination,
     hasMore,
-    isLoadingMore: false,
+    isLoadingMore,
     loadMore,
     ...query,
   };
@@ -108,30 +113,30 @@ export function useInfiniteNotificationsQuery(options?: NotificationQueryOptions
     },
     initialPageParam: 1,
     enabled: userEnabled,
+    staleTime: 30000, // 30 seconds - for notifications we want relatively fresh data
   });
 
-  // Sync unread count
+  // Sync unread count to global store
   useEffect(() => {
     if (query.isSuccess && query.data?.pages.length) {
       setUnreadCount(query.data.pages[0].unreadCount);
     }
   }, [query.isSuccess, query.data, setUnreadCount]);
 
-  // Derive data from query result
-  const pages = query.data?.pages ?? [];
-  const notifications = pages.flatMap(p => p.notifications) ?? [];
-  const unreadCount = query.data?.pages[0]?.unreadCount ?? 0;
-  const hasMore = query.hasNextPage;
-  const isLoadingMore = query.isFetchingNextPage;
-  const loadMore = query.fetchNextPage;
-
   return {
-    notifications,
-    unreadCount,
-    hasMore,
-    isLoadingMore,
-    loadMore,
-    ...query,
+    data: query.data,
+    isLoading: query.isLoading,
+    error: query.error,
+    hasNextPage: query.hasNextPage,
+    fetchNextPage: query.fetchNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+    refetch: query.refetch,
+    // Added convenience fields for consistent API with regular query
+    notifications: query.data?.pages.flatMap(p => p.notifications) ?? [],
+    unreadCount: query.data?.pages[0]?.unreadCount ?? 0,
+    hasMore: query.hasNextPage,
+    isLoadingMore: query.isFetchingNextPage,
+    loadMore: query.fetchNextPage,
   };
 }
 
@@ -148,6 +153,7 @@ export function useMarkNotificationsAsReadMutation() {
       if (!ids) {
         // If marking all as read, just set count to 0
         setUnreadCount(0);
+        toast.success('All notifications marked as read');
       } else {
         // If marking specific notifications, update the cached data
         queryClient.setQueriesData(
@@ -181,13 +187,8 @@ export function useMarkNotificationsAsReadMutation() {
         
         // Update count in store
         setUnreadCount((prev) => Math.max(0, prev - ids.length));
+        toast.success(ids.length === 1 ? 'Notification marked as read' : 'Notifications marked as read');
       }
-
-      toast.success(
-        ids
-          ? 'Notification marked as read'
-          : 'All notifications marked as read'
-      );
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to mark notifications as read');
