@@ -1,10 +1,10 @@
 // app/api/follow/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth/auth-options';
+import { NotificationHelper } from '@/lib/notifications/notification-helper';
 
 // Schema for POST request (follow user)
 const followUserSchema = z.object({
@@ -89,15 +89,7 @@ export async function POST(req: NextRequest) {
     });
     
     // Create a notification for the target user
-    await prisma.notification.create({
-      data: {
-        type: 'FOLLOW',
-        content: `started following you`,
-        linkUrl: `/u/${session.user.username}`,
-        receiverId: targetUserId,
-        senderId: session.user.id,
-      },
-    });
+    await NotificationHelper.createFollowNotification(session.user.id, targetUserId);
     
     // Return the result with follower info
     return NextResponse.json({

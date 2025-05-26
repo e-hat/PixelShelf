@@ -1,8 +1,10 @@
+// app/api/likes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth/auth-options';
+import { NotificationHelper } from '@/lib/notifications/notification-helper';
 
 // Schema for POST request body
 const likeSchema = z.object({
@@ -50,6 +52,7 @@ export async function POST(req: NextRequest) {
     if (assetId) {
       const asset = await prisma.asset.findUnique({
         where: { id: assetId },
+        include: { user: true },
       });
       
       if (!asset) {
@@ -84,12 +87,18 @@ export async function POST(req: NextRequest) {
         },
       });
       
+      // Create notification for the asset owner
+      if (asset.userId !== session.user.id) {
+        await NotificationHelper.createAssetLikeNotification(session.user.id, assetId);
+      }
+      
       return NextResponse.json(newLike, { status: 201 });
     }
     
     if (projectId) {
       const project = await prisma.project.findUnique({
         where: { id: projectId },
+        include: { user: true },
       });
       
       if (!project) {
@@ -123,6 +132,11 @@ export async function POST(req: NextRequest) {
           projectId,
         },
       });
+      
+      // Create notification for the project owner
+      if (project.userId !== session.user.id) {
+        await NotificationHelper.createProjectLikeNotification(session.user.id, projectId);
+      }
       
       return NextResponse.json(newLike, { status: 201 });
     }

@@ -1,9 +1,10 @@
+// app/api/comments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth/auth-options';
-import { Prisma } from '@prisma/client';
+import { NotificationHelper } from '@/lib/notifications/notification-helper';
 
 // Schema for GET request query params
 const getCommentsQuerySchema = z.object({
@@ -67,7 +68,6 @@ export async function GET(req: NextRequest) {
     const orderBy = {
       createdAt: sort === 'latest' ? 'desc' as const : 'asc' as const,
     };
-    
     
     // Get total count for pagination
     const totalCount = await prisma.comment.count({
@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
     // Check if the asset exists
     const asset = await prisma.asset.findUnique({
       where: { id: assetId },
+      include: { user: true },
     });
     
     if (!asset) {
@@ -168,9 +169,11 @@ export async function POST(req: NextRequest) {
     }
     
     // If this is a reply, check if the parent comment exists
+    let parentComment = null;
     if (parentId) {
-      const parentComment = await prisma.comment.findUnique({
+      parentComment = await prisma.comment.findUnique({
         where: { id: parentId },
+        include: { user: true },
       });
       
       if (!parentComment) {
@@ -209,38 +212,13 @@ export async function POST(req: NextRequest) {
       },
     });
     
-    // Create notification for the asset owner (if not commenting on their own asset)
-    if (asset.userId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          type: 'COMMENT',
-          content: `${session.user.name} commented on your asset "${asset.title}"`,
-          linkUrl: `/assets/${assetId}#comments`,
-          receiverId: asset.userId,
-          senderId: session.user.id,
-        },
-      });
-    }
-    
-    // If this is a reply, also notify the parent comment author
-    if (parentId && session.user.id !== asset.userId) {
-      const parentComment = await prisma.comment.findUnique({
-        where: { id: parentId },
-        select: { userId: true },
-      });
-      
-      if (parentComment && parentComment.userId !== session.user.id) {
-        await prisma.notification.create({
-          data: {
-            type: 'COMMENT',
-            content: `${session.user.name} replied to your comment on "${asset.title}"`,
-            linkUrl: `/assets/${assetId}#comment-${newComment.id}`,
-            receiverId: parentComment.userId,
-            senderId: session.user.id,
-          },
-        });
-      }
-    }
+    // Create notifications using the helper
+    await NotificationHelper.createCommentNotification(
+      session.user.id,
+      assetId,
+      content,
+      parentComment?.userId
+    );
     
     return NextResponse.json(newComment, { status: 201 });
   } catch (error) {
