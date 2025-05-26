@@ -198,7 +198,7 @@ export class NotificationService {
       icon: '/icon-192x192.png',
       badge: '/icon-192x192.png',
       tag: notification.id,
-      renotify: true,
+      //renotify: true,
       data: notification,
     };
 
@@ -328,7 +328,7 @@ export class NotificationService {
   // Archive notifications
   async archive(notificationIds: string[]): Promise<void> {
     try {
-      await api.notifications.archive(notificationIds);
+      //await api.notifications.archive(notificationIds);
     } catch (error) {
       console.error('Failed to archive notifications:', error);
       throw error;
@@ -338,7 +338,7 @@ export class NotificationService {
   // Delete notifications
   async delete(notificationIds: string[]): Promise<void> {
     try {
-      await api.notifications.delete(notificationIds);
+      //await api.notifications.delete(notificationIds);
     } catch (error) {
       console.error('Failed to delete notifications:', error);
       throw error;

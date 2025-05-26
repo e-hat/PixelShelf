@@ -1,7 +1,7 @@
 // src/lib/notifications/notification-helper.ts
 import prisma from '@/lib/db/prisma';
 import { NotificationType } from '@prisma/client';
-import { sendNotificationToUser } from '@/app/api/notifications/stream/route';
+import { sendNotificationToUser } from './stream';
 
 interface CreateNotificationOptions {
   type: NotificationType;
