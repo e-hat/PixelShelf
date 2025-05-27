@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/store';
+import { NotificationBell } from '../feature-specific/notification-bell';
 
 const Navbar = () => {
   const { data: session, status } = useSession();
@@ -119,7 +120,7 @@ const Navbar = () => {
             {/* User section */}
             {session ? (
               <div className="flex items-center space-x-4">
-                <NotificationIndicator className="relative" />
+                <NotificationBell className="relative" />
                 
                 <Link 
                   href="/chat" 
@@ -241,7 +242,7 @@ const Navbar = () => {
                   <div className="text-sm font-medium text-muted-foreground">{session.user.email}</div>
                 </div>
                 <div className="ml-auto flex items-center space-x-4">
-                  <NotificationIndicator />
+                  <NotificationBell />
                   <Link href="/chat" className="text-gray-400 hover:text-gray-300">
                     <MessageSquare className="h-6 w-6" />
                   </Link>

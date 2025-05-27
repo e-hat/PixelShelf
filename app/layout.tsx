@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import AuthProvider from '@/context/auth-provider';
 import { ThemeProvider } from '@/context/theme-provider';
 import { ReactQueryProvider } from '@/lib/react-query';
+import { NotificationProvider } from '@/context/notification-context';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -72,29 +73,31 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <ReactQueryProvider>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              <div className="min-h-screen flex flex-col">
-                <Navbar />
-                <main className="flex-grow">{children}</main>
-                <footer className="border-t py-6 md:py-8">
-                  <div className="container mx-auto px-4 md:px-6">
-                    <div className="flex flex-col md:flex-row justify-between items-center">
-                      <div className="flex items-center space-x-1 mb-4 md:mb-0">
-                        <div className="relative w-6 h-6">
-                          <div className="absolute inset-0 bg-pixelshelf-primary rounded-sm"></div>
-                          <div className="absolute inset-0 border-2 border-pixelshelf-dark rounded-sm"></div>
+            <NotificationProvider>
+              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                <div className="min-h-screen flex flex-col">
+                  <Navbar />
+                  <main className="flex-grow">{children}</main>
+                  <footer className="border-t py-6 md:py-8">
+                    <div className="container mx-auto px-4 md:px-6">
+                      <div className="flex flex-col md:flex-row justify-between items-center">
+                        <div className="flex items-center space-x-1 mb-4 md:mb-0">
+                          <div className="relative w-6 h-6">
+                            <div className="absolute inset-0 bg-pixelshelf-primary rounded-sm"></div>
+                            <div className="absolute inset-0 border-2 border-pixelshelf-dark rounded-sm"></div>
+                          </div>
+                          <span className="text-lg font-bold text-pixelshelf-primary">PixelShelf</span>
                         </div>
-                        <span className="text-lg font-bold text-pixelshelf-primary">PixelShelf</span>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        © {new Date().getFullYear()} PixelShelf. All rights reserved.
+                        <div className="text-sm text-muted-foreground">
+                          © {new Date().getFullYear()} PixelShelf. All rights reserved.
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </footer>
-              </div>
-              <Toaster position="bottom-right" />
-            </ThemeProvider>
+                  </footer>
+                </div>
+                <Toaster position="bottom-right" />
+              </ThemeProvider>
+            </NotificationProvider>
           </ReactQueryProvider>
         </AuthProvider>
       </body>

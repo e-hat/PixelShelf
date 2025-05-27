@@ -37,9 +37,12 @@ export class NotificationService {
   private reconnectInterval = 1000;
   private maxReconnectInterval = 30000;
   private reconnectAttempts = 0;
-  private listeners: Map<string, Set<(notification: Notification) => void>> = new Map();
+  private listeners: Map<string, Set<(data: any) => void>> = new Map();
   private isConnecting = false;
   private userId: string | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private lastEventTime = Date.now();
 
   private constructor() {}
 
@@ -50,11 +53,15 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  // Initialize real-time notifications using Server-Sent Events
   async initialize(userId: string): Promise<void> {
     // Prevent multiple simultaneous connections
     if (this.isConnecting || (this.eventSource && this.eventSource.readyState === EventSource.OPEN)) {
-      return;
+      if (this.userId !== userId) {
+        // User changed, disconnect and reconnect
+        this.disconnect();
+      } else {
+        return;
+      }
     }
 
     this.isConnecting = true;
@@ -66,29 +73,38 @@ export class NotificationService {
     }
 
     try {
-      // Request notification permissions
-      if ('Notification' in window && Notification.permission === 'default') {
+      // Request notification permissions if in browser
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
         await Notification.requestPermission();
       }
 
       // Setup SSE connection
-      this.eventSource = new EventSource(`/api/notifications/stream?userId=${userId}`);
+      this.eventSource = new EventSource(`/api/notifications/stream`);
       
       this.eventSource.onopen = () => {
         console.log('Notification stream connected');
         this.reconnectAttempts = 0;
         this.reconnectInterval = 1000;
         this.isConnecting = false;
+        this.lastEventTime = Date.now();
+        this.startHeartbeatMonitor();
       };
 
       this.eventSource.onmessage = (event) => {
+        this.lastEventTime = Date.now();
+        
+        // Handle heartbeat
+        if (event.data.trim() === ': heartbeat') {
+          return;
+        }
+        
         try {
           const data = JSON.parse(event.data);
           
           if (data.type === 'notification') {
             this.handleNotification(data.data);
           } else if (data.type === 'unread_count') {
-            this.handleUnreadCount(data.count);
+            this.handleUnreadCount(data);
           }
         } catch (error) {
           console.error('Error parsing notification:', error);
@@ -100,19 +116,49 @@ export class NotificationService {
         this.isConnecting = false;
         
         if (this.eventSource?.readyState === EventSource.CLOSED) {
-          this.reconnect(userId);
+          this.handleReconnect();
         }
       };
     } catch (error) {
       console.error('Failed to initialize notifications:', error);
       this.isConnecting = false;
+      this.handleReconnect();
     }
   }
 
-  private reconnect(userId: string): void {
+  private startHeartbeatMonitor(): void {
+    // Clear existing timer
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
+
+    // Check for heartbeat every 45 seconds (heartbeat should come every 30s)
+    this.heartbeatTimer = setInterval(() => {
+      const timeSinceLastEvent = Date.now() - this.lastEventTime;
+      if (timeSinceLastEvent > 45000) {
+        console.warn('No heartbeat received, reconnecting...');
+        this.handleReconnect();
+      }
+    }, 45000);
+  }
+
+  private handleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    // Clean up current connection
     if (this.eventSource) {
       this.eventSource.close();
+      this.eventSource = null;
     }
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    if (!this.userId) return;
 
     this.reconnectAttempts++;
     const timeout = Math.min(
@@ -122,25 +168,35 @@ export class NotificationService {
 
     console.log(`Reconnecting notifications in ${timeout}ms (attempt ${this.reconnectAttempts})`);
 
-    setTimeout(() => {
-      if (this.userId === userId) {
-        this.initialize(userId);
+    this.reconnectTimer = setTimeout(() => {
+      if (this.userId) {
+        this.initialize(this.userId);
       }
     }, timeout);
   }
 
   disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
     }
+
     this.userId = null;
     this.isConnecting = false;
-    this.listeners.clear();
+    this.reconnectAttempts = 0;
   }
 
-  // Subscribe to notification events
-  subscribe(event: string, callback: (notification: Notification) => void): () => void {
+  subscribe(event: string, callback: (data: any) => void): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -164,26 +220,33 @@ export class NotificationService {
     this.emit(`notification:${notification.type.toLowerCase()}`, notification);
 
     // Show browser notification if enabled
-    this.showBrowserNotification(notification);
+    if (typeof window !== 'undefined') {
+      this.showBrowserNotification(notification);
+    }
 
     // Play sound if enabled
     this.playNotificationSound();
   }
 
-  private handleUnreadCount(count: number): void {
-    // Emit unread count update
-    this.emit('unread_count', { unreadCount: count } as any);
+  private handleUnreadCount(data: { count: number }): void {
+    this.emit('unread_count', data);
   }
 
   private emit(event: string, data: any): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      callbacks.forEach(callback => callback(data));
+      callbacks.forEach(callback => {
+        try {
+          callback(data);
+        } catch (error) {
+          console.error(`Error in notification listener for event ${event}:`, error);
+        }
+      });
     }
   }
 
   private async showBrowserNotification(notification: Notification): Promise<void> {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
       return;
     }
 
@@ -198,7 +261,6 @@ export class NotificationService {
       icon: '/icon-192x192.png',
       badge: '/icon-192x192.png',
       tag: notification.id,
-      //renotify: true,
       data: notification,
     };
 
@@ -238,6 +300,8 @@ export class NotificationService {
   }
 
   private async playNotificationSound(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
     const preferences = await this.getPreferences();
     if (!preferences.inApp.sound) {
       return;
@@ -248,12 +312,15 @@ export class NotificationService {
       audio.volume = 0.3;
       await audio.play();
     } catch (error) {
-      console.error('Failed to play notification sound:', error);
+      // Silently fail - user might not have interacted with page yet
     }
   }
 
-  // Get user notification preferences
   async getPreferences(): Promise<NotificationPreferences> {
+    if (typeof window === 'undefined') {
+      return this.getDefaultPreferences();
+    }
+
     try {
       const stored = localStorage.getItem('notification-preferences');
       if (stored) {
@@ -263,7 +330,10 @@ export class NotificationService {
       console.error('Failed to load notification preferences:', error);
     }
 
-    // Return default preferences
+    return this.getDefaultPreferences();
+  }
+
+  private getDefaultPreferences(): NotificationPreferences {
     return {
       email: {
         enabled: true,
@@ -288,61 +358,36 @@ export class NotificationService {
       },
       inApp: {
         enabled: true,
-        sound: true,
+        sound: false, // Default to false to avoid annoying users
         desktop: true,
       },
     };
   }
 
-  // Save user notification preferences
   async savePreferences(preferences: NotificationPreferences): Promise<void> {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('notification-preferences', JSON.stringify(preferences));
+      } catch (error) {
+        console.error('Failed to save notification preferences locally:', error);
+      }
+    }
+
     try {
-      localStorage.setItem('notification-preferences', JSON.stringify(preferences));
+      // Save to server
       await api.users.updateProfile({ notificationPreferences: preferences });
     } catch (error) {
-      console.error('Failed to save notification preferences:', error);
+      console.error('Failed to save notification preferences to server:', error);
       throw error;
     }
   }
 
-  // Mark notifications as read with optimistic updates
   async markAsRead(notificationIds: string[]): Promise<void> {
-    try {
-      await api.notifications.markAsRead(notificationIds);
-    } catch (error) {
-      console.error('Failed to mark notifications as read:', error);
-      throw error;
-    }
+    await api.notifications.markAsRead(notificationIds);
   }
 
-  // Mark all notifications as read
   async markAllAsRead(): Promise<void> {
-    try {
-      await api.notifications.markAsRead();
-    } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
-      throw error;
-    }
-  }
-
-  // Archive notifications
-  async archive(notificationIds: string[]): Promise<void> {
-    try {
-      //await api.notifications.archive(notificationIds);
-    } catch (error) {
-      console.error('Failed to archive notifications:', error);
-      throw error;
-    }
-  }
-
-  // Delete notifications
-  async delete(notificationIds: string[]): Promise<void> {
-    try {
-      //await api.notifications.delete(notificationIds);
-    } catch (error) {
-      console.error('Failed to delete notifications:', error);
-      throw error;
-    }
+    await api.notifications.markAsRead();
   }
 }
 

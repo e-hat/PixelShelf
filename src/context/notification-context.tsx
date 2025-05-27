@@ -185,7 +185,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       // Optimistic update
       setNotifications((prev) => prev.filter((n) => !notificationIds.includes(n.id)));
       
-      await notificationService.archive(notificationIds);
+      //await notificationService.archive(notificationIds);
       
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
@@ -203,7 +203,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       // Optimistic update
       setNotifications((prev) => prev.filter((n) => !notificationIds.includes(n.id)));
       
-      await notificationService.delete(notificationIds);
+      //await notificationService.delete(notificationIds);
       
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });

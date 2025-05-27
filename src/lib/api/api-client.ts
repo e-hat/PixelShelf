@@ -244,6 +244,8 @@ export const api = {
     markAsRead: (ids?: string[]) => {
       return apiClient.patch('/api/notifications', ids ? { ids } : { all: true });
     },
+    getPreferences: () => apiClient.get('/api/notifications/preferences'),
+    updatePreferences: (preferences: any) => apiClient.put('/api/notifications/preferences', preferences),
   },
 
   // Payments

@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/store';
 import { notificationService } from '@/services/notification-service';
+import { useNotificationsQuery } from '@/hooks/use-notifications-query';
 
 interface NotificationBellProps {
   className?: string;
@@ -19,32 +20,87 @@ export function NotificationBell({ className }: NotificationBellProps) {
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const setUnreadCount = useNotificationStore((state) => state.setUnreadCount);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showPulse, setShowPulse] = useState(false);
 
+  // Use React Query to get initial unread count
+  const { unreadCount: queryUnreadCount } = useNotificationsQuery({
+    limit: 1,
+    unreadOnly: true,
+    enabled: status === 'authenticated',
+  });
+
+  // Sync query unread count to store
+  useEffect(() => {
+    if (queryUnreadCount !== undefined && queryUnreadCount !== unreadCount) {
+      setUnreadCount(queryUnreadCount);
+    }
+  }, [queryUnreadCount, setUnreadCount]);
+
+  // Initialize notification service and subscribe to updates
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.id) {
+      // Initialize the notification service
+      notificationService.initialize(session.user.id);
+
       // Subscribe to unread count updates
-      const unsubscribe = notificationService.subscribe('unread_count', (data: any) => {
-        setUnreadCount(data.unreadCount);
+      const unsubscribeCount = notificationService.subscribe('unread_count', (data: any) => {
+        const newCount = data.count || data.unreadCount || 0;
+        setUnreadCount(newCount);
       });
 
       // Subscribe to new notifications for animation
-      const unsubscribeNew = notificationService.subscribe('notification', () => {
+      const unsubscribeNew = notificationService.subscribe('notification', (notification: any) => {
+        // Trigger animations
         setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 1000);
+        setShowPulse(true);
+        
+        // Increment unread count
+        setUnreadCount(prev => prev + 1);
+        
+        // Reset animations after delay
+        setTimeout(() => {
+          setIsAnimating(false);
+          setShowPulse(false);
+        }, 2000);
       });
 
       return () => {
-        unsubscribe();
+        unsubscribeCount();
         unsubscribeNew();
       };
     }
   }, [status, session, setUnreadCount]);
 
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (status === 'unauthenticated') {
+        notificationService.disconnect();
+      }
+    };
+  }, [status]);
+
+  if (status !== 'authenticated') {
+    return (
+      <Link 
+        href="/notifications" 
+        className={cn(
+          "relative inline-flex items-center justify-center p-2 rounded-full",
+          "hover:bg-accent transition-colors",
+          className
+        )}
+      >
+        <Bell className="h-5 w-5" />
+      </Link>
+    );
+  }
+
   return (
     <Link 
       href="/notifications" 
       className={cn(
-        "relative inline-flex items-center justify-center p-2 rounded-full hover:bg-accent transition-colors",
+        "relative inline-flex items-center justify-center p-2 rounded-full",
+        "hover:bg-accent transition-colors",
         className
       )}
     >
@@ -60,14 +116,29 @@ export function NotificationBell({ className }: NotificationBellProps) {
       
       <AnimatePresence>
         {unreadCount > 0 && (
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0 }}
-            className="absolute -top-1 -right-1 bg-pixelshelf-primary text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 font-medium"
-          >
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </motion.span>
+          <>
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              className={cn(
+                "absolute -top-1 -right-1 bg-pixelshelf-primary text-white text-xs rounded-full",
+                "min-w-[20px] h-5 flex items-center justify-center px-1 font-medium"
+              )}
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </motion.span>
+            
+            {/* Pulse animation for new notifications */}
+            {showPulse && (
+              <motion.span
+                initial={{ scale: 1, opacity: 1 }}
+                animate={{ scale: 2.5, opacity: 0 }}
+                transition={{ duration: 1 }}
+                className="absolute -top-1 -right-1 bg-pixelshelf-primary rounded-full min-w-[20px] h-5"
+              />
+            )}
+          </>
         )}
       </AnimatePresence>
     </Link>

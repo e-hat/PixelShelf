@@ -4,22 +4,25 @@
  * A simple in‐memory SSE connection manager for real‐time notifications.
  */
 
-const connections = new Map<string, ReadableStreamDefaultController>();
+const connections = new Map<string, WritableStreamDefaultWriter<Uint8Array>>();
 
 /**
- * Add a new SSE connection controller for a given user.
+ * Add a new SSE connection writer for a given user.
  */
 export function addConnection(
   userId: string,
-  controller: ReadableStreamDefaultController
+  writer: WritableStreamDefaultWriter<Uint8Array>
 ) {
-  connections.set(userId, controller);
+  connections.set(userId, writer);
 }
 
 /**
  * Remove the SSE connection for a given user (e.g. on disconnect).
  */
 export function removeConnection(userId: string) {
+  const writer = connections.get(userId);
+  if (!writer) return;
+  writer.close().catch(() => {});
   connections.delete(userId);
 }
 
@@ -30,8 +33,8 @@ export function sendNotificationToUser(
   userId: string,
   notification: any
 ) {
-  const controller = connections.get(userId);
-  if (!controller) return;
+  const writer = connections.get(userId);
+  if (!writer) return;
 
   try {
     const payload = {
@@ -41,10 +44,11 @@ export function sendNotificationToUser(
     const encoded = new TextEncoder().encode(
       `data: ${JSON.stringify(payload)}\n\n`
     );
-    controller.enqueue(encoded);
+    writer.write(encoded).catch(() => {
+      removeConnection(userId);
+    });
   } catch {
-    // If enqueue fails (e.g. connection closed), clean up
-    connections.delete(userId);
+    removeConnection(userId);
   }
 }
 
@@ -67,8 +71,8 @@ export function updateUnreadCount(
   userId: string,
   count: number
 ) {
-  const controller = connections.get(userId);
-  if (!controller) return;
+  const writer = connections.get(userId);
+  if (!writer) return;
 
   try {
     const payload = {
@@ -78,8 +82,10 @@ export function updateUnreadCount(
     const encoded = new TextEncoder().encode(
       `data: ${JSON.stringify(payload)}\n\n`
     );
-    controller.enqueue(encoded);
+    writer.write(encoded).catch(() => {
+      removeConnection(userId);
+    });
   } catch {
-    connections.delete(userId);
+    removeConnection(userId);
   }
 }
