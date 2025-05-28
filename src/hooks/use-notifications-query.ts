@@ -51,7 +51,6 @@ export function useNotificationsQuery(options?: NotificationQueryOptions) {
         page: 1,
         limit,
         unreadOnly,
-        archivedOnly,
       }),
     enabled: userEnabled,
     staleTime: 30000, // 30 seconds - for notifications we want relatively fresh data
@@ -110,7 +109,6 @@ export function useInfiniteNotificationsQuery(options?: NotificationQueryOptions
         page: pageParam,
         limit,
         unreadOnly,
-        archivedOnly,
       }),
     getNextPageParam: (lastPage) => {
       const { page, totalPages } = lastPage.pagination;
