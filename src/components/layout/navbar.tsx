@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserAvatar } from '@/components/feature-specific/user-avatar';
-import NotificationIndicator from '@/components/feature-specific/notification-indicator';
 import { 
   User, 
   MessageSquare, 

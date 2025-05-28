@@ -15,37 +15,44 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const url = new URL(req.url);
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '20');
-    const unreadOnly = url.searchParams.get('unreadOnly') === 'true';
+    const searchParams = req.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const unreadOnly = searchParams.get('unreadOnly') === 'true';
+    const archivedOnly = searchParams.get('archivedOnly') === 'true';
     
-    // Build query
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    
+    // Build where clause
     const where = {
       receiverId: session.user.id,
       ...(unreadOnly ? { read: false } : {}),
+      ...(archivedOnly ? { read: true } : {}),
     };
     
-    // Get total count
-    const totalCount = await prisma.notification.count({ where });
-    
-    // Get notifications with pagination
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            image: true,
+    // Get notifications
+    const [notifications, total] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
           },
         },
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.notification.count({ where }),
+    ]);
     
     // Get unread count
     const unreadCount = await prisma.notification.count({
@@ -61,8 +68,8 @@ export async function GET(req: NextRequest) {
       pagination: {
         page,
         limit,
-        totalCount,
-        totalPages: Math.ceil(totalCount / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {

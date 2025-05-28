@@ -97,16 +97,22 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--background));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--pixelshelf-primary);
+  background: #888;
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--pixelshelf-accent);
+  background: #666;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #888 transparent;
 }
 
 /* ============================
@@ -241,23 +247,24 @@
 .home-feed-layout.show-sidecards .left-sidebar {
   animation: slide-in-left 0.2s ease forwards;
   display: block;
+  animation-fill-mode: forwards;
 }
 
 .home-feed-layout.show-sidecards .right-sidebar {
   animation: slide-in-right 0.2s ease forwards;
   display: block;
+  animation-fill-mode: forwards;
 }
 
 /* After animation completes, hide sidecards completely */
 .home-feed-layout.hide-sidecards .home-feed-sidebar {
-  animation-fill-mode: forwards;
+  display: none;
 }
 
 /* Make sure sidecards are hidden after animation completes */
 @media (min-width: 1024px) {
   .home-feed-layout.hide-sidecards .home-feed-sidebar {
     display: none;
-    animation-fill-mode: forwards;
   }
 }
 

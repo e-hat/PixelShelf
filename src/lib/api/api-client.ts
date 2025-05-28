@@ -246,6 +246,7 @@ export const api = {
     },
     getPreferences: () => apiClient.get('/api/notifications/preferences'),
     updatePreferences: (preferences: any) => apiClient.put('/api/notifications/preferences', preferences),
+    delete: (ids: string[]) => apiClient.post('/api/notifications/delete', { ids }),
   },
 
   // Payments

@@ -389,6 +389,10 @@ export class NotificationService {
   async markAllAsRead(): Promise<void> {
     await api.notifications.markAsRead();
   }
+
+  async delete(notificationIds: string[]): Promise<void> {
+    await api.notifications.delete(notificationIds);
+  }
 }
 
 export const notificationService = NotificationService.getInstance();

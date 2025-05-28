@@ -64,10 +64,11 @@ export function ExploreSearchParams({
     setSelectedType(type || null);
     setActiveTab(tab === 'creators' ? 'creators' : 'assets');
     
-    // Only apply filters if:
-    // 1. Not the first render, or there are actual filter params
-    // 2. And not just a tab change without other param changes
-    if ((!isFirstRender.current || query || tag || type) && !isTabChangeOnlyRef.current) {
+    // Always apply filters if:
+    // 1. Not the first render, or
+    // 2. There are actual filter params, or
+    // 3. The tab parameter is present
+    if (!isFirstRender.current || query || tag || type || tab) {
       applyFilters(query, tag ? [tag] : [], type || null, tab === 'creators' ? 'creators' : 'assets');
     }
     

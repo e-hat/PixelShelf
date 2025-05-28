@@ -18,7 +18,6 @@ interface NotificationContextType {
   selectedNotifications: Set<string>;
   markAsRead: (notificationIds: string[]) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  archiveNotifications: (notificationIds: string[]) => Promise<void>;
   deleteNotifications: (notificationIds: string[]) => Promise<void>;
   toggleNotificationSelection: (notificationId: string) => void;
   selectAllNotifications: () => void;
@@ -35,7 +34,6 @@ const NotificationContext = createContext<NotificationContextType>({
   selectedNotifications: new Set(),
   markAsRead: async () => {},
   markAllAsRead: async () => {},
-  archiveNotifications: async () => {},
   deleteNotifications: async () => {},
   toggleNotificationSelection: () => {},
   selectAllNotifications: () => {},
@@ -180,30 +178,16 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [notifications, queryClient, setUnreadCount]);
 
-  const archiveNotifications = useCallback(async (notificationIds: string[]) => {
-    try {
-      // Optimistic update
-      setNotifications((prev) => prev.filter((n) => !notificationIds.includes(n.id)));
-      
-      //await notificationService.archive(notificationIds);
-      
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-      
-      toast.success(`${notificationIds.length} notification${notificationIds.length > 1 ? 's' : ''} archived`);
-      clearSelection();
-    } catch (error) {
-      toast.error('Failed to archive notifications');
-      throw error;
-    }
-  }, [queryClient]);
+  const clearSelection = useCallback(() => {
+    setSelectedNotifications(new Set());
+  }, []);
 
   const deleteNotifications = useCallback(async (notificationIds: string[]) => {
     try {
       // Optimistic update
       setNotifications((prev) => prev.filter((n) => !notificationIds.includes(n.id)));
       
-      //await notificationService.delete(notificationIds);
+      await notificationService.delete(notificationIds);
       
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
@@ -211,10 +195,12 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       toast.success(`${notificationIds.length} notification${notificationIds.length > 1 ? 's' : ''} deleted`);
       clearSelection();
     } catch (error) {
+      // Revert on error
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       toast.error('Failed to delete notifications');
       throw error;
     }
-  }, [queryClient]);
+  }, [queryClient, clearSelection]);
 
   const toggleNotificationSelection = useCallback((notificationId: string) => {
     setSelectedNotifications((prev) => {
@@ -231,10 +217,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const selectAllNotifications = useCallback(() => {
     setSelectedNotifications(new Set(notifications.map((n) => n.id)));
   }, [notifications]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedNotifications(new Set());
-  }, []);
 
   const updatePreferences = useCallback(async (newPreferences: NotificationPreferences) => {
     try {
@@ -259,7 +241,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     selectedNotifications,
     markAsRead,
     markAllAsRead,
-    archiveNotifications,
     deleteNotifications,
     toggleNotificationSelection,
     selectAllNotifications,

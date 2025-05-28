@@ -61,7 +61,6 @@ export default function NotificationsPage() {
     clearSelection,
     markAsRead,
     markAllAsRead,
-    archiveNotifications,
     deleteNotifications,
   } = useNotifications();
   
@@ -163,7 +162,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const handleBulkAction = async (action: 'read' | 'archive' | 'delete') => {
+  const handleBulkAction = async (action: 'read' | 'delete') => {
     const selectedIds = Array.from(selectedNotifications);
     if (selectedIds.length === 0) return;
     
@@ -171,9 +170,6 @@ export default function NotificationsPage() {
       switch (action) {
         case 'read':
           await markAsRead(selectedIds);
-          break;
-        case 'archive':
-          await archiveNotifications(selectedIds);
           break;
         case 'delete':
           await deleteNotifications(selectedIds);
@@ -355,7 +351,7 @@ export default function NotificationsPage() {
         <div className="mb-4 p-4 bg-muted rounded-lg flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Checkbox
-              checked={selectedNotifications.size === filteredNotifications.length}
+              checked={selectedNotifications.size >= 1}
               onCheckedChange={(checked) => {
                 if (checked) {
                   selectAllNotifications();
@@ -381,14 +377,6 @@ export default function NotificationsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleBulkAction('archive')}
-            >
-              <Archive className="h-4 w-4 mr-2" />
-              Archive
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => handleBulkAction('delete')}
               className="text-destructive"
             >
@@ -396,20 +384,6 @@ export default function NotificationsPage() {
               Delete
             </Button>
           </div>
-        </div>
-      )}
-
-      {/* Mark all as read */}
-      {unreadCount > 0 && selectedNotifications.size === 0 && (
-        <div className="mb-4 flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={markAllAsRead}
-          >
-            <CheckCheck className="h-4 w-4 mr-2" />
-            Mark all as read
-          </Button>
         </div>
       )}
 
@@ -435,16 +409,12 @@ export default function NotificationsPage() {
           <h2 className="text-xl font-medium mb-2">
             {searchQuery || filterTypes.size > 0 
               ? 'No notifications match your filters' 
-              : activeTab === 'unread' 
-                ? 'No unread notifications' 
-                : 'No notifications yet'}
+              : 'No notifications yet'}
           </h2>
           <p className="text-muted-foreground">
             {searchQuery || filterTypes.size > 0
               ? 'Try adjusting your filters'
-              : activeTab === 'unread'
-                ? "You're all caught up!"
-                : 'When people interact with you or your content, you\'ll see it here.'}
+              : 'When people interact with you or your content, you\'ll see it here.'}
           </p>
         </div>
       ) : (
@@ -503,14 +473,17 @@ function NotificationItem({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "flex items-start p-4 hover:bg-muted/50 rounded-lg transition-colors group",
+        "flex items-center p-4 hover:bg-muted/50 rounded-lg transition-colors group",
         !notification.read && "bg-muted/30"
       )}
     >
       <Checkbox
         checked={isSelected}
         onCheckedChange={onToggleSelect}
-        className="mr-3 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        className={cn(
+          "mr-3 transition-opacity",
+          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        )}
         onClick={(e) => e.stopPropagation()}
       />
       

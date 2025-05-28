@@ -17,9 +17,9 @@ type NotificationsPage = Awaited<ReturnType<typeof api.notifications.getAll>>;
 
 export const notificationKeys = {
   all: ['notifications'] as const,
-  list: (filters: { unreadOnly?: boolean }) =>
+  list: (filters: { unreadOnly?: boolean, archivedOnly?: boolean }) =>
     [...notificationKeys.all, 'list', filters] as const,
-  infiniteList: (filters: { unreadOnly?: boolean }) =>
+  infiniteList: (filters: { unreadOnly?: boolean, archivedOnly?: boolean }) =>
     [...notificationKeys.all, 'list', 'infinite', filters] as const,
   unread: () => [...notificationKeys.all, 'unread'] as const,
 };
@@ -28,6 +28,7 @@ export const notificationKeys = {
 type NotificationQueryOptions = {
   limit?: number;
   unreadOnly?: boolean;
+  archivedOnly?: boolean;
   enabled?: boolean;
 };
 
@@ -37,10 +38,11 @@ export function useNotificationsQuery(options?: NotificationQueryOptions) {
   const {
     limit = 20,
     unreadOnly = false,
+    archivedOnly = false,
     enabled: userEnabled = true,
   } = options ?? {};
 
-  const queryKey = notificationKeys.list({ unreadOnly });
+  const queryKey = notificationKeys.list({ unreadOnly, archivedOnly });
 
   const query = useQuery<NotificationsPage, Error>({
     queryKey,
@@ -49,6 +51,7 @@ export function useNotificationsQuery(options?: NotificationQueryOptions) {
         page: 1,
         limit,
         unreadOnly,
+        archivedOnly,
       }),
     enabled: userEnabled,
     staleTime: 30000, // 30 seconds - for notifications we want relatively fresh data
@@ -88,10 +91,11 @@ export function useInfiniteNotificationsQuery(options?: NotificationQueryOptions
   const {
     limit = 20,
     unreadOnly = false,
+    archivedOnly = false,
     enabled: userEnabled = true,
   } = options ?? {};
 
-  const queryKey = notificationKeys.infiniteList({ unreadOnly });
+  const queryKey = notificationKeys.infiniteList({ unreadOnly, archivedOnly });
 
   const query = useInfiniteQuery<
     NotificationsPage,
@@ -106,6 +110,7 @@ export function useInfiniteNotificationsQuery(options?: NotificationQueryOptions
         page: pageParam,
         limit,
         unreadOnly,
+        archivedOnly,
       }),
     getNextPageParam: (lastPage) => {
       const { page, totalPages } = lastPage.pagination;

@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { 
   TrendingUp, 
   UserCheck, 
@@ -36,6 +36,208 @@ import { HomeFeedSkeleton } from './home-feed-skeleton';
 import { useUserStats } from '@/hooks/use-user-stats';
 import { useNotificationsQuery } from '@/hooks/use-notifications-query';
 import FollowButton from '@/components/feature-specific/follow-button';
+
+// Left sidebar: User profile card and quick actions
+const LeftSidebar = memo(({ 
+  session, 
+  userProfile,
+  popularTags 
+}: { 
+  session: any, 
+  userProfile: any,
+  popularTags: { name: string; count: number }[]
+}) => (
+  <div className="home-feed-sidebar left-sidebar">
+    {/* Profile Card */}
+    {session?.user && (
+      <div className="sidebar-card flex flex-col items-center text-center mb-4">
+        <UserAvatar 
+          user={session.user}
+          size="xl"
+          className="mb-4"
+        />
+        <h3 className="font-semibold text-lg">{session.user.name}</h3>
+        <p className="text-sm text-muted-foreground mb-4">@{session.user.username}</p>
+        
+        <div className="flex justify-around w-full mb-4">
+          <div className="text-center">
+            <p className="font-semibold">{userProfile?.stats?.followers || 0}</p>
+            <p className="text-xs text-muted-foreground">Followers</p>
+          </div>
+          <div className="text-center">
+            <p className="font-semibold">{userProfile?.stats?.following || 0}</p>
+            <p className="text-xs text-muted-foreground">Following</p>
+          </div>
+          <div className="text-center">
+            <p className="font-semibold">{userProfile?.stats?.assets || 0}</p>
+            <p className="text-xs text-muted-foreground">Assets</p>
+          </div>
+        </div>
+        
+        <Link href={`/u/${session.user.username}`} className="w-full">
+          <Button variant="outline" size="sm" className="w-full">
+            View Profile
+          </Button>
+        </Link>
+      </div>
+    )}
+    
+    {/* Quick Actions */}
+    <div className="sidebar-card">
+      <h3 className="font-semibold mb-3">Quick Actions</h3>
+      <div className="space-y-2">
+        <Link href="/upload" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
+          <Upload className="h-4 w-4 mr-2 text-pixelshelf-primary" />
+          <span>Upload New Asset</span>
+        </Link>
+        <Link href="/projects/new" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
+          <FolderKanban className="h-4 w-4 mr-2 text-pixelshelf-primary" />
+          <span>Create Project</span>
+        </Link>
+        <Link href="/notifications" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
+          <Bell className="h-4 w-4 mr-2 text-pixelshelf-primary" />
+          <span>View Notifications</span>
+        </Link>
+        <Link href="/explore" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
+          <Users className="h-4 w-4 mr-2 text-pixelshelf-primary" />
+          <span>Discover Creators</span>
+        </Link>
+      </div>
+    </div>
+    
+    {/* Popular Tags */}
+    <div className="sidebar-card">
+      <h3 className="font-semibold mb-3">Popular Tags</h3>
+      <div className="flex flex-wrap gap-2">
+        {popularTags.map(tag => (
+          <Link 
+            key={tag.name} 
+            href={`/explore?tag=${tag.name}`}
+            className="text-xs bg-muted hover:bg-accent px-2 py-1 rounded-full transition-colors"
+          >
+            #{tag.name}
+            <span className="ml-1 text-muted-foreground">({tag.count})</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  </div>
+));
+
+// Right sidebar: Trending creators, recent activity
+const RightSidebar = memo(({ 
+  trendingCreators, 
+  notifications, 
+  isLoadingNotifications,
+  getNotificationIcon 
+}: { 
+  trendingCreators: UserProfile[], 
+  notifications: Notification[],
+  isLoadingNotifications: boolean,
+  getNotificationIcon: (type: Notification['type']) => React.ReactNode
+}) => (
+  <div className="home-feed-sidebar right-sidebar">
+    {/* Trending Creators */}
+    <div className="sidebar-card">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-semibold">Trending Creators</h3>
+        <Link href="/explore?tab=creators" className="text-xs text-pixelshelf-primary hover:underline flex items-center">
+          See all
+          <ArrowUpRight className="h-3 w-3 ml-1" />
+        </Link>
+      </div>
+      
+      <div className="space-y-3">
+        {trendingCreators && trendingCreators.length > 0 ? (
+          trendingCreators.map(creator => (
+            <Link 
+              key={creator.id} 
+              href={`/u/${creator.username}`}
+              className="flex items-center p-2 hover:bg-muted rounded-md transition-colors"
+            >
+              <UserAvatar user={creator} size="sm" />
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="font-medium text-sm">{creator.name}</p>
+                <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
+              </div>
+              <FollowButton 
+                userId={creator.id}
+                isFollowing={creator.isFollowing || false}
+                size="sm" 
+                variant="outline"
+                className="ml-2 text-xs h-8"
+              />
+            </Link>
+          ))
+        ) : (
+          <div className="text-center py-2">
+            <p className="text-sm text-muted-foreground">No trending creators yet</p>
+          </div>
+        )}
+      </div>
+    </div>
+    
+    {/* Recent Activity */}
+    <div className="sidebar-card">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-semibold">Recent Activity</h3>
+        <Link href="/notifications" className="text-xs text-pixelshelf-primary hover:underline flex items-center">
+          See all
+          <ArrowUpRight className="h-3 w-3 ml-1" />
+        </Link>
+      </div>
+      
+      {isLoadingNotifications ? (
+        <div className="py-4 flex justify-center">
+          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : notifications && notifications.length > 0 ? (
+        <div className="space-y-3">
+          {notifications.slice(0, 5).map((notification: Notification) => (
+            <Link 
+              key={notification.id} 
+              href={notification.linkUrl || '/notifications'}
+              className="flex items-start"
+            >
+              <div className="rounded-full bg-muted p-2 mr-3">
+                {getNotificationIcon(notification.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm leading-tight">
+                  {notification.sender?.name && (
+                    <span className="font-medium">{notification.sender.name} </span>
+                  )}
+                  {notification.content}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {getRelativeTime(notification.createdAt)}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          No recent activity to show
+        </p>
+      )}
+    </div>
+    
+    {/* Footer */}
+    <div className="text-xs text-muted-foreground mt-6 px-2">
+      <div className="flex flex-wrap gap-2 mb-2">
+        <Link href="/about" className="hover:text-foreground">About</Link>
+        <span>•</span>
+        <Link href="/terms" className="hover:text-foreground">Terms</Link>
+        <span>•</span>
+        <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+        <span>•</span>
+        <Link href="/help" className="hover:text-foreground">Help</Link>
+      </div>
+      <p>© {new Date().getFullYear()} PixelShelf</p>
+    </div>
+  </div>
+));
 
 export default function HomeFeed() {
   const { data: session } = useSession();
@@ -124,17 +326,16 @@ export default function HomeFeed() {
     setViewMode(mode);
     
     if (mode === 'list') {
-      // First set the correct class to trigger animations
-      setLayoutClass('show-sidecards');
-      // Then update the state
+      // For list view, show sidecards immediately
       setShowSidecards(true);
+      setLayoutClass('show-sidecards');
     } else {
-      // First set the correct class to trigger animations
+      // For grid view, first set the class to trigger hide animation
       setLayoutClass('hide-sidecards');
-      // Then update the state
+      // Then update the state after animation completes
       setTimeout(() => {
         setShowSidecards(false);
-      }, 300); // Wait for animation to complete
+      }, 200); // Match the animation duration
     }
   };
   
@@ -186,190 +387,6 @@ export default function HomeFeed() {
     }
   };
 
-  // Left sidebar: User profile card and quick actions
-  const LeftSidebar = () => (
-    <div className="home-feed-sidebar left-sidebar">
-      {/* Profile Card */}
-      {session?.user && (
-        <div className="sidebar-card flex flex-col items-center text-center mb-4">
-          <UserAvatar 
-            user={session.user}
-            size="xl"
-            className="mb-4"
-          />
-          <h3 className="font-semibold text-lg">{session.user.name}</h3>
-          <p className="text-sm text-muted-foreground mb-4">@{session.user.username}</p>
-          
-          <div className="flex justify-around w-full mb-4">
-            <div className="text-center">
-              <p className="font-semibold">{userProfile?.stats?.followers || 0}</p>
-              <p className="text-xs text-muted-foreground">Followers</p>
-            </div>
-            <div className="text-center">
-              <p className="font-semibold">{userProfile?.stats?.following || 0}</p>
-              <p className="text-xs text-muted-foreground">Following</p>
-            </div>
-            <div className="text-center">
-              <p className="font-semibold">{userProfile?.stats?.assets || 0}</p>
-              <p className="text-xs text-muted-foreground">Assets</p>
-            </div>
-          </div>
-          
-          <Link href={`/u/${session.user.username}`} className="w-full">
-            <Button variant="outline" size="sm" className="w-full">
-              View Profile
-            </Button>
-          </Link>
-        </div>
-      )}
-      
-      {/* Quick Actions */}
-      <div className="sidebar-card">
-        <h3 className="font-semibold mb-3">Quick Actions</h3>
-        <div className="space-y-2">
-          <Link href="/upload" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
-            <Upload className="h-4 w-4 mr-2 text-pixelshelf-primary" />
-            <span>Upload New Asset</span>
-          </Link>
-          <Link href="/projects/new" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
-            <FolderKanban className="h-4 w-4 mr-2 text-pixelshelf-primary" />
-            <span>Create Project</span>
-          </Link>
-          <Link href="/notifications" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
-            <Bell className="h-4 w-4 mr-2 text-pixelshelf-primary" />
-            <span>View Notifications</span>
-          </Link>
-          <Link href="/explore" className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
-            <Users className="h-4 w-4 mr-2 text-pixelshelf-primary" />
-            <span>Discover Creators</span>
-          </Link>
-        </div>
-      </div>
-      
-      {/* Popular Tags */}
-      <div className="sidebar-card">
-        <h3 className="font-semibold mb-3">Popular Tags</h3>
-        <div className="flex flex-wrap gap-2">
-          {popularTags.map(tag => (
-            <Link 
-              key={tag.name} 
-              href={`/explore?tag=${tag.name}`}
-              className="text-xs bg-muted hover:bg-accent px-2 py-1 rounded-full transition-colors"
-            >
-              #{tag.name}
-              <span className="ml-1 text-muted-foreground">({tag.count})</span>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Right sidebar: Trending creators, recent activity
-  const RightSidebar = () => (
-    <div className="home-feed-sidebar right-sidebar">
-      {/* Trending Creators */}
-      <div className="sidebar-card">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold">Trending Creators</h3>
-          <Link href="/explore?tab=creators" className="text-xs text-pixelshelf-primary hover:underline flex items-center">
-            See all
-            <ArrowUpRight className="h-3 w-3 ml-1" />
-          </Link>
-        </div>
-        
-        <div className="space-y-3">
-          {trendingCreators && trendingCreators.length > 0 ? (
-            trendingCreators.map(creator => (
-              <Link 
-                key={creator.id} 
-                href={`/u/${creator.username}`}
-                className="flex items-center p-2 hover:bg-muted rounded-md transition-colors"
-              >
-                <UserAvatar user={creator} size="sm" />
-                <div className="ml-3 flex-1 min-w-0">
-                  <p className="font-medium text-sm">{creator.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
-                </div>
-                <FollowButton 
-                  userId={creator.id}
-                  isFollowing={creator.isFollowing || false}
-                  size="sm" 
-                  variant="outline"
-                  className="ml-2 text-xs h-8"
-                />
-              </Link>
-            ))
-          ) : (
-            <div className="text-center py-2">
-              <p className="text-sm text-muted-foreground">No trending creators yet</p>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Recent Activity */}
-      <div className="sidebar-card">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold">Recent Activity</h3>
-          <Link href="/notifications" className="text-xs text-pixelshelf-primary hover:underline flex items-center">
-            See all
-            <ArrowUpRight className="h-3 w-3 ml-1" />
-          </Link>
-        </div>
-        
-        {isLoadingNotifications ? (
-          <div className="py-4 flex justify-center">
-            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : notifications && notifications.length > 0 ? (
-          <div className="space-y-3">
-            {notifications.slice(0, 5).map((notification: Notification) => (
-              <Link 
-                key={notification.id} 
-                href={notification.linkUrl || '/notifications'}
-                className="flex items-start"
-              >
-                <div className="rounded-full bg-muted p-2 mr-3">
-                  {getNotificationIcon(notification.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm leading-tight">
-                    {notification.sender?.name && (
-                      <span className="font-medium">{notification.sender.name} </span>
-                    )}
-                    {notification.content}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {getRelativeTime(notification.createdAt)}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No recent activity to show
-          </p>
-        )}
-      </div>
-      
-      {/* Footer */}
-      <div className="text-xs text-muted-foreground mt-6 px-2">
-        <div className="flex flex-wrap gap-2 mb-2">
-          <Link href="/about" className="hover:text-foreground">About</Link>
-          <span>•</span>
-          <Link href="/terms" className="hover:text-foreground">Terms</Link>
-          <span>•</span>
-          <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-          <span>•</span>
-          <Link href="/help" className="hover:text-foreground">Help</Link>
-        </div>
-        <p>© {new Date().getFullYear()} PixelShelf</p>
-      </div>
-    </div>
-  );
-
   return (
     <div className="container px-4 py-8">
       <PageHeader
@@ -382,7 +399,13 @@ export default function HomeFeed() {
       ) : (
         <div className={`home-feed-layout ${layoutClass}`}>
           {/* Left Sidebar */}
-          <LeftSidebar />
+          {showSidecards && (
+            <LeftSidebar 
+              session={session}
+              userProfile={userProfile}
+              popularTags={popularTags}
+            />
+          )}
           
           {/* Main Feed */}
           <div className="home-feed-main">
@@ -391,16 +414,23 @@ export default function HomeFeed() {
               tabs={homeTabs}
               infiniteScroll={true}
               emptyFollowingComponent={<EmptyFollowingState />}
-              itemsPerRow={viewMode === 'grid' ? 4 : 1} // 1 in list mode, 4 in grid mode
+              itemsPerRow={viewMode === 'grid' ? 4 : 1}
               showSidecards={showSidecards}
               defaultViewMode={viewMode}
-              listViewFirst={true} // List view button first
+              listViewFirst={true}
               onViewModeChange={handleViewModeChange}
             />
           </div>
           
           {/* Right Sidebar */}
-          <RightSidebar />
+          {showSidecards && (
+            <RightSidebar 
+              trendingCreators={trendingCreators}
+              notifications={notifications}
+              isLoadingNotifications={isLoadingNotifications}
+              getNotificationIcon={getNotificationIcon}
+            />
+          )}
         </div>
       )}
     </div>
