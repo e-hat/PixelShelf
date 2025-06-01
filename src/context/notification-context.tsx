@@ -98,6 +98,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const showToastNotification = (notification: Notification) => {
+    // Don't show toast if in-app notifications are disabled
+    if (!preferences?.inApp?.enabled) {
+      return;
+    }
+
     const icon = getNotificationIcon(notification.type);
     const message = notification.sender 
       ? `${notification.sender.name} ${notification.content}`
@@ -224,7 +229,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       setPreferences(newPreferences);
       toast.success('Notification preferences updated');
     } catch (error) {
-      toast.error('Failed to update preferences');
+      console.error('Failed to update preferences:', error);
+      toast.error('Failed to update notification preferences');
       throw error;
     }
   }, []);

@@ -150,24 +150,28 @@ const RightSidebar = memo(({
       <div className="space-y-3">
         {trendingCreators && trendingCreators.length > 0 ? (
           trendingCreators.map(creator => (
-            <Link 
-              key={creator.id} 
-              href={`/u/${creator.username}`}
-              className="flex items-center p-2 hover:bg-muted rounded-md transition-colors"
-            >
-              <UserAvatar user={creator} size="sm" />
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="font-medium text-sm">{creator.name}</p>
-                <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
+            <div key={creator.id} className="flex items-center p-2 hover:bg-muted rounded-md transition-colors">
+              <Link 
+                href={`/u/${creator.username}`}
+                className="flex items-center flex-1 min-w-0"
+              >
+                <UserAvatar user={creator} size="sm" />
+                <div className="ml-3 flex-1 min-w-0">
+                  <p className="font-medium text-sm">{creator.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">@{creator.username}</p>
+                </div>
+              </Link>
+              <div className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center">
+                  <Users className="h-3 w-3 mr-1" />
+                  {creator.stats?.followers || 0}
+                </div>
+                <div className="flex items-center">
+                  <FileText className="h-3 w-3 mr-1" />
+                  {creator.stats?.assets || 0}
+                </div>
               </div>
-              <FollowButton 
-                userId={creator.id}
-                isFollowing={creator.isFollowing || false}
-                size="sm" 
-                variant="outline"
-                className="ml-2 text-xs h-8"
-              />
-            </Link>
+            </div>
           ))
         ) : (
           <div className="text-center py-2">

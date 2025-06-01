@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "./node_modules/.prisma/client"
 }
 
 datasource db {
@@ -66,8 +67,8 @@ model User {
   sessions    Session[]
   projects    Project[]
   assets      Asset[]
-  followers   Follow[]        @relation("Following")
-  following   Follow[]        @relation("Followers")
+  followers   Follow[]        @relation("UserFollowers")
+  following   Follow[]        @relation("UserFollowing")
   sentMessages     Message[]       @relation("SentMessages")
   receivedMessages Message[]       @relation("ReceivedMessages")
   chats       UserChat[]
@@ -75,6 +76,7 @@ model User {
   comments    Comment[]
   notifications Notification[]  @relation("ReceivedNotifications")
   sentNotifications Notification[] @relation("SentNotifications")
+  notificationPreferences NotificationPreferences?
 }
 
 enum UserRole {
@@ -141,8 +143,8 @@ model Follow {
   followingId String
   createdAt   DateTime @default(now())
 
-  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId])
@@ -262,4 +264,17 @@ model Subscription {
   stripeCurrentPeriodEnd DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model NotificationPreferences {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  email     Json
+  push      Json
+  inApp     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

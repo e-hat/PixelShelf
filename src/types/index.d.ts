@@ -335,3 +335,32 @@ export interface UseUserProfile {
   unfollowUser: () => Promise<void>;
   refetch: () => Promise<void>;
 }
+
+export interface NotificationPreferences {
+  email: {
+    enabled: boolean;
+    frequency: 'instant' | 'daily' | 'weekly';
+    types: {
+      follow: boolean;
+      like: boolean;
+      comment: boolean;
+      message: boolean;
+      system: boolean;
+    };
+  };
+  push: {
+    enabled: boolean;
+    types: {
+      follow: boolean;
+      like: boolean;
+      comment: boolean;
+      message: boolean;
+      system: boolean;
+    };
+  };
+  inApp: {
+    enabled: boolean;
+    sound: boolean;
+    desktop: boolean;
+  };
+}

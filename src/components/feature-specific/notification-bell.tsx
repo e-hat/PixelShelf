@@ -21,6 +21,7 @@ export function NotificationBell({ className }: NotificationBellProps) {
   const setUnreadCount = useNotificationStore((state) => state.setUnreadCount);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
+  const [preferences, setPreferences] = useState<any>(null);
 
   // Use React Query to get initial unread count
   const { unreadCount: queryUnreadCount } = useNotificationsQuery({
@@ -36,9 +37,16 @@ export function NotificationBell({ className }: NotificationBellProps) {
     }
   }, [queryUnreadCount, setUnreadCount]);
 
+  // Load notification preferences
+  useEffect(() => {
+    if (status === 'authenticated') {
+      notificationService.getPreferences().then(setPreferences);
+    }
+  }, [status]);
+
   // Initialize notification service and subscribe to updates
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id) {
+    if (status === 'authenticated' && session?.user?.id && preferences?.inApp?.enabled) {
       // Initialize the notification service
       notificationService.initialize(session.user.id);
 
@@ -69,7 +77,7 @@ export function NotificationBell({ className }: NotificationBellProps) {
         unsubscribeNew();
       };
     }
-  }, [status, session, setUnreadCount]);
+  }, [status, session, setUnreadCount, preferences?.inApp?.enabled]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -115,7 +123,7 @@ export function NotificationBell({ className }: NotificationBellProps) {
       </motion.div>
       
       <AnimatePresence>
-        {unreadCount > 0 && (
+        {unreadCount > 0 && preferences?.inApp?.enabled && (
           <>
             <motion.span
               initial={{ scale: 0 }}

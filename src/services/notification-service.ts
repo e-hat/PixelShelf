@@ -322,15 +322,12 @@ export class NotificationService {
     }
 
     try {
-      const stored = localStorage.getItem('notification-preferences');
-      if (stored) {
-        return JSON.parse(stored);
-      }
+      const response = await api.notifications.getPreferences();
+      return response;
     } catch (error) {
       console.error('Failed to load notification preferences:', error);
+      return this.getDefaultPreferences();
     }
-
-    return this.getDefaultPreferences();
   }
 
   private getDefaultPreferences(): NotificationPreferences {
@@ -365,19 +362,10 @@ export class NotificationService {
   }
 
   async savePreferences(preferences: NotificationPreferences): Promise<void> {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('notification-preferences', JSON.stringify(preferences));
-      } catch (error) {
-        console.error('Failed to save notification preferences locally:', error);
-      }
-    }
-
     try {
-      // Save to server
-      await api.users.updateProfile({ notificationPreferences: preferences });
+      await api.notifications.updatePreferences(preferences);
     } catch (error) {
-      console.error('Failed to save notification preferences to server:', error);
+      console.error('Failed to save notification preferences:', error);
       throw error;
     }
   }
